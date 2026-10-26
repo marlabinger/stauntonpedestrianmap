@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Staunton Map — Photo Security Test</title>
+  <style>
+    body { font: 16px/1.5 system-ui,sans-serif; max-width: 620px; margin: 32px auto; padding: 0 18px; color: #18332a; }
+    h1 { font-size: 1.5rem; }
+    label { display: block; font-weight: 650; margin: 15px 0 6px; }
+    button { margin-top: 18px; padding: 10px 18px; background: #276749; color: white; border: 0; border-radius: 8px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    #result { background: #f1f5f2; padding: 14px; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .note { color: #4d6257; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body>
+  <h1>Photo verification test</h1>
+  <p class="note">This page tests Turnstile and image validation. It does not store or publish a photo.</p>
+  <form id="test-form">
+    <label for="photo">Choose one test image (JPG, PNG or WebP; under 1.5 MB)</label>
+    <input id="photo" type="file" accept="image/png,image/jpeg,image/webp" required>
+    <label>Human verification</label>
+    <!-- Replace REPLACE_WITH_YOUR_TURNSTILE_SITE_KEY with your PUBLIC Turnstile site key. -->
+    <div class="cf-turnstile" data-sitekey="0x4AAAAAAFnVCQgir73yinKB"></div>
+    <button id="test-button" type="submit">Test one photo</button>
+  </form>
+  <h2>Test result</h2>
+  <pre id="result" role="status" aria-live="polite">Not tested yet.</pre>
+  <script>
+    const SUPABASE_URL = 'https://gygkdxiisugxvjcktkjt.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_aP48erzABmef587o09sLRQ_OW4UFyGC';
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    const form = document.getElementById('test-form');
+    const result = document.getElementById('result');
+    const button = document.getElementById('test-button');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const file = document.getElementById('photo').files[0];
+      const token = form.querySelector('[name="cf-turnstile-response"]')?.value;
+      if (!file) { result.textContent = 'Choose a photo first.'; return; }
+      if (!token) { result.textContent = 'Complete Turnstile verification first.'; return; }
+      button.disabled = true;
+      result.textContent = 'Sending validation test...';
+      const data = new FormData();
+      data.append('photos', file, file.name);
+      data.append('cf-turnstile-response', token);
+      try {
+        const response = await supabaseClient.functions.invoke('submit-report-with-photos', { body: data });
+        if (response.error) {
+          const body = response.error.context?.json ? await response.error.context.json().catch(() => null) : null;
+          result.textContent = 'Request failed: ' + (response.error.message || 'Unknown error') + (body ? '\n' + JSON.stringify(body, null, 2) : '');
+        } else {
+          result.textContent = 'Success!\n' + JSON.stringify(response.data, null, 2);
+        }
+      } catch (error) {
+        result.textContent = 'Browser request error: ' + String(error);
+      } finally {
+        button.disabled = false;
+        if (window.turnstile) window.turnstile.reset();
+      }
+    });
+  </script>
+</body>
+</html>
