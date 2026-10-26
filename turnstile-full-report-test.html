@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Staunton Map — Full Report & Photo Validation Test</title>
+  <style>
+    body { font: 16px/1.5 system-ui,sans-serif; max-width: 620px; margin: 32px auto; padding: 0 18px; color: #18332a; }
+    h1 { font-size: 1.5rem; }
+    label { display: block; font-weight: 650; margin: 15px 0 6px; }
+    input, select, textarea { font: inherit; max-width: 100%; }
+    select, input[type="number"], textarea { display:block; width:100%; padding:8px; border:1px solid #a6b9ad; border-radius:5px; }
+    button { margin-top: 18px; padding: 10px 18px; background: #276749; color: white; border: 0; border-radius: 8px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    #result { background: #f1f5f2; padding: 14px; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .note { color: #4d6257; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body>
+  <h1>Full report and photo validation test</h1>
+  <p class="note">Tests report details, Turnstile, and a real image. Does not create a report or store photos.</p>
+  <form id="test-form">
+    <label for="type">Issue type</label>
+    <select id="type" required>
+      <option value="Sidewalk">Sidewalk</option>
+      <option value="Crosswalk">Crosswalk</option>
+      <option value="Lighting">Lighting</option>
+      <option value="Accessibility">Accessibility</option>
+      <option value="Broken pedestrian signal">Broken pedestrian signal</option>
+      <option value="Other">Other</option>
+    </select>
+    <label for="severity">Severity</label>
+    <select id="severity" required>
+      <option value="Low">Low</option>
+      <option value="Medium" selected>Medium</option>
+      <option value="High">High</option>
+    </select>
+    <label for="description">Description</label>
+    <textarea id="description" maxlength="800" rows="2">TEST ONLY - validating full photo submission</textarea>
+    <label for="lat">Latitude (Staunton test location)</label>
+    <input id="lat" type="number" step="any" value="38.1496" required>
+    <label for="lng">Longitude (Staunton test location)</label>
+    <input id="lng" type="number" step="any" value="-79.0717" required>
+    <label for="photo">Choose one test image (JPG, PNG or WebP; under 1.5 MB)</label>
+    <input id="photo" type="file" accept="image/png,image/jpeg,image/webp" required>
+    <label>Human verification</label>
+    <!-- Replace REPLACE_WITH_YOUR_TURNSTILE_SITE_KEY with your PUBLIC Turnstile site key. -->
+    <div class="cf-turnstile" data-sitekey="0x4AAAAAAFnVCQgir73yinKB"></div>
+    <button id="test-button" type="submit">Validate report and photo</button>
+  </form>
+  <h2>Test result</h2>
+  <pre id="result" role="status" aria-live="polite">Not tested yet.</pre>
+  <script>
+    const SUPABASE_URL = 'https://gygkdxiisugxvjcktkjt.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_aP48erzABmef587o09sLRQ_OW4UFyGC';
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    const form = document.getElementById('test-form');
+    const result = document.getElementById('result');
+    const button = document.getElementById('test-button');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const file = document.getElementById('photo').files[0];
+      const token = form.querySelector('[name="cf-turnstile-response"]')?.value;
+      if (!file) { result.textContent = 'Choose a photo first.'; return; }
+      if (!token) { result.textContent = 'Complete Turnstile verification first.'; return; }
+      button.disabled = true;
+      result.textContent = 'Sending validation test...';
+      const data = new FormData();
+      data.append('photos', file, file.name);
+      data.append('type', document.getElementById('type').value);
+      data.append('severity', document.getElementById('severity').value);
+      data.append('description', document.getElementById('description').value);
+      data.append('lat', document.getElementById('lat').value);
+      data.append('lng', document.getElementById('lng').value);
+      data.append('cf-turnstile-response', token);
+      try {
+        const response = await supabaseClient.functions.invoke('submit-report-with-photos', { body: data });
+        if (response.error) {
+          const body = response.error.context?.json ? await response.error.context.json().catch(() => null) : null;
+          result.textContent = 'Request failed: ' + (response.error.message || 'Unknown error') + (body ? '\n' + JSON.stringify(body, null, 2) : '');
+        } else {
+          result.textContent = 'Success!\n' + JSON.stringify(response.data, null, 2);
+        }
+      } catch (error) {
+        result.textContent = 'Browser request error: ' + String(error);
+      } finally {
+        button.disabled = false;
+        if (window.turnstile) window.turnstile.reset();
+      }
+    });
+  </script>
+</body>
+</html>
