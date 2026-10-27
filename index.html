@@ -336,11 +336,7 @@ function renderSharedMarkers() {
         button.appendChild(image);
         preview.replaceChildren(button);
         
-        image.addEventListener('load', () => {
-          if (preview.isConnected) marker.getPopup().update();
-        });
-
-        marker.getPopup().update();
+  
 
 
       } catch (error) {
