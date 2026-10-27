@@ -111,7 +111,7 @@
           <option value="Crosswalk">Crosswalk</option>
           <option value="Lighting">Lighting</option>
           <option value="Accessibility">Accessibility</option>
-          <option value="Broken pedestrian signal">Broken pedestrian signal</option>
+          <option value="Broken/missing pedestrian signal">Broken/missing pedestrian signal</option>
           <option value="Other">Other</option>
         </select>
         <label for="severity">Severity level *</label>
@@ -146,7 +146,7 @@
         <button class="filter-chip" type="button" data-filter="Crosswalk">Crosswalk</button>
         <button class="filter-chip" type="button" data-filter="Lighting">Lighting</button>
         <button class="filter-chip" type="button" data-filter="Accessibility">Accessibility</button>
-        <button class="filter-chip" type="button" data-filter="Broken pedestrian signal">Broken pedestrian signal</button>
+        <button class="filter-chip" type="button" data-filter="Broken/missing pedestrian signal">Broken/missing pedestrian signal</button>
         <button class="filter-chip" type="button" data-filter="Other">Other</button>
       </div>
       <div class="filter-label">Filter by severity</div>
@@ -198,7 +198,7 @@ testSupabaseConnection();
       };
       const SYMBOLS = {
         'Sidewalk': '▰', 'Crosswalk': '▥', 'Lighting': '☀',
-        'Accessibility': '♿', 'Broken pedestrian signal': '!', Other: '?'
+        'Accessibility': '♿', 'Broken/missing pedestrian signal': '!', Other: '?'
       };
       const KNOWN_TYPES = new Set(Object.keys(SYMBOLS));
       const severityColor = severity => SEVERITY_COLORS[severity] || SEVERITY_COLORS.Unspecified;
