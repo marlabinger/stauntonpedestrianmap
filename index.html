@@ -55,6 +55,9 @@
     .existing-photo { margin-top:8px; font-size:12px; }
     .existing-photo img { max-height:100px; max-width:150px; display:block; margin:6px 0; border-radius:6px; }
     .text-button { border:0; background:none; color:var(--blue); padding:0; font-size:12px; cursor:pointer; }
+    .turnstile-box { margin-top:14px; padding:12px; border:1px solid var(--line); border-radius:9px; }
+    .turnstile-box[hidden] { display:none; }
+    .primary:disabled { opacity:.6; cursor:wait; }
     .notice { margin-top:14px; padding:10px 12px; border-radius:9px; background:#fff7e5; color:#795411; font-size:12px; }
     .status { min-height:18px; margin-top:9px; color:#176b43; font-size:13px; }
     .severity-legend { display:flex; flex-wrap:wrap; gap:12px; padding:9px 16px; border-bottom:1px solid var(--line); font-size:12px; }
@@ -124,6 +127,11 @@
         <input id="photo" type="file" accept="image/png,image/jpeg,image/webp" multiple />
         <div class="hint">Choose up to 4 photos per report (JPG, PNG, or WebP; 1.5 MB maximum per photo). During editing, newly selected photos are added to the existing gallery.</div>
         <div id="existing-photo" class="existing-photo" hidden></div>
+        <div id="photo-verification" class="turnstile-box">
+          <strong>Human verification for photo submissions</strong>
+          <p class="hint">Required only for new reports with photos; text-only reports do not require this check.</p>
+          <div class="cf-turnstile" data-sitekey="0x4AAAAAAFnVCQgir73yinKB"></div>
+        </div>
         <label>Issue location *</label>
         <div class="location-row"><span id="location-label">Click the map to choose a location</span><button type="button" id="clear-location">Clear</button></div>
         <div class="hint">Tip: zoom in to your neighborhood first. You can also drag the pin after placing it.</div>
@@ -150,7 +158,7 @@
         <button class="filter-chip" type="button" data-severity="Unspecified">Not specified</button>
       </div>
       <div id="report-list"><div class="empty">No reports yet. Add the first one above.</div></div>
-      <div class="notice"><strong>Prototype note:</strong> New reports without photos are submitted for review before appearing publicly. New photo submissions are temporarily unavailable while security work is completed. Older browser-local reports and their photos remain only on this browser. Do not include sensitive or identifying information.</div>
+      <div class="notice"><strong>Prototype note:</strong> New reports are submitted for review before appearing publicly. Photo submissions may be in a validation-only test mode during rollout. Older browser-local reports and their photos remain only on this browser. Do not include sensitive or identifying information.</div>
     </aside>
   </main>
   <dialog id="photo-dialog" class="photo-dialog" aria-label="Enlarged report photo">
@@ -158,6 +166,7 @@
     <img id="photo-dialog-image" alt="Enlarged photo attached to the selected report">
     <div class="gallery-controls"><button id="photo-prev" type="button" aria-label="Previous photo">← Previous</button><span id="photo-position" aria-live="polite"></span><button id="photo-next" type="button" aria-label="Next photo">Next →</button></div>
   </dialog>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
@@ -220,6 +229,7 @@ testSupabaseConnection();
       let sharedGalleryPhotos = [];
       let galleryIndex = 0;
       const MAX_PHOTOS = 4;
+      const MAX_PHOTO_BYTES = Math.floor(1.5 * 1024 * 1024);
       const $ = id => document.getElementById(id);
       // Backward-compatible: older reports stored a single string in "photo".
       function reportPhotos(report) {
@@ -297,28 +307,7 @@ renderReports();
 }
 loadApprovedReports();
 
-async function testPendingReportSubmission() {
-  const { error } = await supabaseClient
-    .from('reports')
-    .insert({
-      type: 'Sidewalk',
-      severity: 'Low',
-      description: 'TEST PENDING REPORT - Checking public submissions',
-      lat: 38.1496,
-      lng: -79.0717,
-      status: 'pending'
-    });
-
-  if (error) {
-    console.error('Test submission failed:', error);
-  } else {
-    console.log('Pending report submitted successfully!');
-  }
-}
-
-window.testPendingReportSubmission = testPendingReportSubmission;
-
-      function persistReports() {
+function persistReports() {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(reports)); return true; }
         catch (err) { $('status').textContent = 'Browser storage is full. Try a smaller photo or remove an old report.'; return false; }
       }
@@ -373,6 +362,9 @@ window.testPendingReportSubmission = testPendingReportSubmission;
         $('existing-photo').innerHTML = '';
         removedPhotoIndexes = new Set();
         $('status').textContent = '';
+      }
+      function resetTurnstile() {
+        try { if (window.turnstile) window.turnstile.reset(); } catch (err) { console.warn('Turnstile reset failed:', err); }
       }
       function renderExistingPhotos(report) {
         const holder = $('existing-photo');
@@ -551,7 +543,7 @@ function renderReports() {
         if (files.some(file => !['image/jpeg','image/png','image/webp'].includes(file.type))) {
           $('status').textContent = 'Please choose only JPG, PNG, or WebP images.'; return;
         }
-        if (files.some(file => file.size > 1.5 * 1024 * 1024)) {
+        if (files.some(file => file.size < 1 || file.size > MAX_PHOTO_BYTES)) {
           $('status').textContent = 'Each photo must be under 1.5 MB.'; return;
         }
         const original = editingId === null ? null : reports.find(r => String(r.id) === editingId);
@@ -560,25 +552,79 @@ function renderReports() {
         if (keptPhotos.length + files.length > MAX_PHOTOS) {
           $('status').textContent = `A report can have up to ${MAX_PHOTOS} photos. Remove existing photos or select fewer new ones.`; return;
         }
-        let newPhotos;
-        try {
-          newPhotos = await Promise.all(files.map(file => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          })));
-        } catch {
-          $('status').textContent = 'Could not read one of the photos. Try again.'; return;
-        }
-        const photos = [...keptPhotos, ...newPhotos];
+                 // New photo reports go to the secure Edge Function, never to localStorage.
+         if (!original && files.length > 0) {
+           const siteKey = document.querySelector('.cf-turnstile')?.dataset.sitekey;
+           if (!siteKey || siteKey.startsWith('REPLACE_')) {
+             $('status').textContent = 'Photo verification is not configured yet. Contact the site administrator.';
+             return;
+           }
+           const token = $('report-form').querySelector('[name="cf-turnstile-response"]')?.value;
+           if (!token) {
+             $('status').textContent = 'Please complete the photo verification check first.';
+             return;
+           }
+           const data = new FormData();
+           data.append('type', type);
+           data.append('severity', severity);
+           data.append('description', $('description').value.trim());
+           data.append('lat', String(selectedLocation.lat));
+           data.append('lng', String(selectedLocation.lng));
+           data.append('cf-turnstile-response', token);
+           files.forEach(file => data.append('photos', file, file.name));
+           $('submit-report').disabled = true;
+           $('status').textContent = 'Submitting your photo report for approval...';
+           try {
+             const { data: result, error } = await supabaseClient.functions.invoke(
+               'submit-report-with-photos', { body: data }
+             );
+             if (error) {
+               let detail = '';
+               // Supabase functions errors may include a readable JSON response body.
+               try {
+                 const context = error.context;
+                 if (context && typeof context.json === 'function') {
+                   const body = await context.json();
+                   detail = typeof body?.error === 'string' ? body.error : '';
+                 }
+               } catch (ignored) { /* Fallback to a generic message. */ }
+               console.error('Photo report submission failed:', error);
+               $('status').textContent = detail || 'Could not submit your photo report. Please try again.';
+               return;
+             }
+             // A 200 response means the server validated ONLY; the report was NOT saved.
+             if (result?.uploadsEnabled !== true) {
+               $('status').textContent = 'Photo upload test passed, but saving is disabled. Your report was not submitted.';
+               return;
+             }
+             resetEditor();
+             $('status').textContent = 'Photo report submitted! It will appear publicly after review and approval.';
+             return;
+           } catch (error) {
+             console.error('Unexpected photo submission error:', error);
+             $('status').textContent = 'Could not submit your photo report. Please try again.';
+             return;
+           } finally {
+             $('submit-report').disabled = false;
+             resetTurnstile();
+           }
+         }
 
-        if (!original && photos.length > 0) {
-          $('status').textContent = 'New photo submissions are not enabled yet. Remove the photos to send this report for approval.';
-          return;
-        }
+         // The older browser-local editing workflow still handles photos locally.
+         let newPhotos;
+         try {
+           newPhotos = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+             const reader = new FileReader();
+             reader.onload = () => resolve(reader.result);
+             reader.onerror = reject;
+             reader.readAsDataURL(file);
+           })));
+         } catch {
+           $('status').textContent = 'Could not read one of the photos. Try again.'; return;
+         }
+         const photos = [...keptPhotos, ...newPhotos];
 
-        // Send NEW reports without photos to Supabase for approval.
+// Send NEW reports without photos to Supabase for approval.
         // Existing browser-local reports can still be edited locally.
         if (!original && photos.length === 0) {
           $('submit-report').disabled = true;
