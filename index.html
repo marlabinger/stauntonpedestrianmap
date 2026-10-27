@@ -282,6 +282,73 @@ function renderSharedMarkers() {
       <div class="report-actions"><button class="text-button" type="button" data-shared-photos="${safeText(report.id)}">View approved photos</button></div>
     `);
 
+    // Show a small preview when an approved report popup opens.
+    marker.on('popupopen', async () => {
+      const popup = marker.getPopup().getElement();
+      const galleryLink = popup?.querySelector('[data-shared-photos]');
+      if (!galleryLink) return;
+
+      const preview = document.createElement('div');
+      preview.textContent = 'Loading photo preview...';
+      preview.style.marginTop = '10px';
+      galleryLink.parentElement.before(preview);
+
+      try {
+        const url =
+          `${SUPABASE_URL}/functions/v1/get-approved-report-photos?report_id=${encodeURIComponent(report.id)}`;
+
+        const response = await fetch(url, {
+          headers: { apikey: SUPABASE_PUBLISHABLE_KEY },
+          cache: 'no-store'
+        });
+
+        if (!response.ok) throw new Error('Preview unavailable');
+
+        const result = await response.json();
+        const firstPhoto = Array.isArray(result.photos)
+          ? result.photos.find(p =>
+              typeof p?.url === 'string' &&
+              p.url.startsWith('https://'))
+          : null;
+
+        if (!preview.isConnected) return;
+
+        if (!firstPhoto) {
+          preview.remove();
+          return;
+        }
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'photo-trigger';
+        button.dataset.sharedPhotos = String(report.id);
+        button.setAttribute('aria-label', 'View approved report photos');
+
+        const image = document.createElement('img');
+        image.src = firstPhoto.url;
+        image.alt = 'Approved photograph of this issue';
+        image.loading = 'lazy';
+        image.style.width = '190px';
+        image.style.height = '120px';
+        image.style.objectFit = 'cover';
+        image.style.borderRadius = '8px';
+
+        button.appendChild(image);
+        preview.replaceChildren(button);
+        
+        image.addEventListener('load', () => {
+          if (preview.isConnected) marker.getPopup().update();
+        });
+
+        marker.getPopup().update();
+
+
+      } catch (error) {
+        console.warn('Photo preview unavailable:', error);
+        preview.remove();
+      }
+    });
+
     supabaseMarkers.push(marker);
   });
 }
