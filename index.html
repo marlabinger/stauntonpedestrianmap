@@ -111,7 +111,7 @@
           <option value="Crosswalk">Crosswalk</option>
           <option value="Lighting">Lighting</option>
           <option value="Accessibility">Accessibility</option>
-          <option value="Broken/missing pedestrian signal">Broken/missing pedestrian signal</option>
+          <option value="Broken pedestrian signal">Broken/missing pedestrian signal</option>
           <option value="Other">Other</option>
         </select>
         <label for="severity">Severity level *</label>
@@ -146,7 +146,7 @@
         <button class="filter-chip" type="button" data-filter="Crosswalk">Crosswalk</button>
         <button class="filter-chip" type="button" data-filter="Lighting">Lighting</button>
         <button class="filter-chip" type="button" data-filter="Accessibility">Accessibility</button>
-        <button class="filter-chip" type="button" data-filter="Broken/missing pedestrian signal">Broken/missing pedestrian signal</button>
+        <button class="filter-chip" type="button" data-filter="Broken pedestrian signal">Broken/missing pedestrian signal</button>
         <button class="filter-chip" type="button" data-filter="Other">Other</button>
       </div>
       <div class="filter-label">Filter by severity</div>
@@ -198,8 +198,10 @@ testSupabaseConnection();
       };
       const SYMBOLS = {
         'Sidewalk': '▰', 'Crosswalk': '▥', 'Lighting': '☀',
-        'Accessibility': '♿', 'Broken/missing pedestrian signal': '!', Other: '?'
+        'Accessibility': '♿', 'Broken pedestrian signal': '!', Other: '?'
       };
+      // Display-friendly name; keep the stored type unchanged for API compatibility.
+      const displayType = type => type === 'Broken pedestrian signal' ? 'Broken/missing pedestrian signal' : type;
       const KNOWN_TYPES = new Set(Object.keys(SYMBOLS));
       const severityColor = severity => SEVERITY_COLORS[severity] || SEVERITY_COLORS.Unspecified;
       const map = L.map('map').setView([38.1496, -79.0717], 14);
@@ -275,7 +277,7 @@ function renderSharedMarkers() {
     marker.reportId = String(report.id);
 
     marker.bindPopup(`
-      <strong>${safeText(report.type)}</strong>
+      <strong>${safeText(displayType(report.type))}</strong>
       <div><strong>Severity:</strong> ${safeText(report.severity)}</div>
       <p>${safeText(report.description || 'No description')}</p>
       <small>Approved community report</small>
@@ -393,7 +395,7 @@ function persistReports() {
       function popupHtml(report) {
         const photos = reportPhotos(report);
         const photo = photos.length ? `<div class="photo-gallery">${photoButtons(report, 'popup-photo')}</div><div class="photo-count">${photos.length} photo${photos.length === 1 ? '' : 's'} · Click to enlarge</div>` : '';
-        return `<strong>${safeText(report.type)}</strong><div><strong>Severity:</strong> ${safeText(report.severity || 'Not specified')}</div><div>${safeText(report.description || 'No additional details provided.')}</div><small>${safeText(formatDate(report.createdAt))}</small>${photo}<div class="report-actions"><button type="button" class="text-button" data-edit="${safeText(report.id)}">Edit report</button></div>`;
+        return `<strong>${safeText(displayType(report.type))}</strong><div><strong>Severity:</strong> ${safeText(report.severity || 'Not specified')}</div><div>${safeText(report.description || 'No additional details provided.')}</div><small>${safeText(formatDate(report.createdAt))}</small>${photo}<div class="report-actions"><button type="button" class="text-button" data-edit="${safeText(report.id)}">Edit report</button></div>`;
       }
       function visibleReports() {
         return reports.filter(r => {
@@ -532,7 +534,7 @@ function renderReports() {
       <span class="report-dot"
         style="background:${severityColor(r.severity)}"></span>
       <div style="flex:1;min-width:0">
-        <strong>${safeText(r.type)}</strong>
+        <strong>${safeText(displayType(r.type))}</strong>
         <p>
           Severity: ${safeText(r.severity || 'Not specified')}
           · ${safeText(r.description || 'No description')}
@@ -561,7 +563,7 @@ function renderReports() {
       <span class="report-dot"
         style="background:${severityColor(r.severity)}"></span>
       <div style="flex:1;min-width:0">
-        <strong>${safeText(r.type)}</strong>
+        <strong>${safeText(displayType(r.type))}</strong>
         <p>
           Severity: ${safeText(r.severity)}
           · ${safeText(r.description || 'No description')}
