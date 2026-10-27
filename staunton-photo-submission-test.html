@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Staunton Pedestrian Needs Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    :root { --navy: #276749;--blue: #648b62; --ink:#172b43; --muted:#61738a; --line:#d9e2ec; --bg:#f3f6fa; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--bg); font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 24px; color:white; background:var(--navy); }
+    .brand { display:flex; gap:12px; align-items:center; }
+    .brand-icon { font-size:30px; }
+    h1 { margin:0; font-size:clamp(20px,2.6vw,28px); line-height:1.15; }
+    .tagline { margin:4px 0 0; color:#dce7f3; font-size:14px; }
+    .header-note { font-size:13px; color:#dce7f3; text-align:right; }
+    main { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(320px,0.85fr); gap:16px; padding:16px; min-height:calc(100vh - 88px); }
+    .map-card,.panel { overflow:hidden; border:1px solid var(--line); border-radius:16px; background:white; box-shadow:0 4px 18px #17324f0c; }
+    .map-top { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:13px 16px; border-bottom:1px solid var(--line); }
+    .map-top strong { font-size:15px; }
+    .map-top span { color:var(--muted); font-size:13px; }
+    #map { height:calc(100vh - 170px); min-height:520px; width:100%; background:#e8eef2; }
+    .panel { padding:20px; align-self:start; }
+    .panel h2 { margin:0 0 5px; font-size:23px; }
+    .intro { margin:0 0 18px; color:var(--muted); font-size:14px; }
+    label { display:block; margin:14px 0 6px; font-weight:650; font-size:14px; }
+    input,select,textarea,button { font:inherit; }
+    input[type=text],select,textarea { width:100%; border:1px solid #c8d4e1; border-radius:9px; padding:11px 12px; color:var(--ink); background:#fff; }
+    textarea { min-height:94px; resize:vertical; }
+    input[type=file] { display:block; width:100%; font-size:13px; }
+    .hint { color:var(--muted); font-size:12px; margin-top:5px; }
+    .location-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--line); padding:10px 12px; border-radius:9px; font-size:13px; }
+    .location-row button { border:0; background:transparent; color:var(--blue); font-weight:650; cursor:pointer; padding:0; }
+    .primary { width:100%; border:0; border-radius:9px; padding:12px 15px; margin-top:18px; background:var(--blue); color:white; font-weight:700; cursor:pointer; }
+    .primary:hover { background:#1767c8; }
+    .secondary { border:1px solid var(--line); border-radius:8px; padding:8px 10px; background:white; color:var(--ink); cursor:pointer; }
+    .section-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:22px; padding-top:16px; border-top:1px solid var(--line); }
+    .section-head h3 { margin:0; font-size:16px; }
+    .filter-row { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+    .filter-chip { border:1px solid var(--line); border-radius:999px; background:#fff; padding:6px 10px; font-size:12px; cursor:pointer; }
+    .filter-chip.active { background:#e8f2ff; border-color:#8dbbfa; color:#1457a4; }
+    .report-count { color:var(--muted); font-size:12px; }
+    .empty { color:var(--muted); font-size:13px; padding:14px 0 2px; }
+    .report-item { display:flex; gap:10px; align-items:flex-start; border-top:1px solid #edf1f5; padding:12px 0; }
+    .report-dot { width:11px; height:11px; flex:0 0 11px; border-radius:50%; margin-top:5px; }
+    .report-item strong { display:block; font-size:13px; }
+    .report-item p { margin:3px 0 0; font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
+    .report-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; }
+    .filter-label { font-size:12px; font-weight:700; margin-top:12px; color:var(--muted); }
+    .editing-note { margin-top:12px; padding:10px; border-radius:8px; background:#eaf5ed; color:#205a3d; font-size:13px; }
+    .edit-actions { display:flex; gap:8px; align-items:center; }
+    .edit-actions .primary { flex:1; }
+    .edit-actions .secondary { margin-top:18px; }
+    .existing-photo { margin-top:8px; font-size:12px; }
+    .existing-photo img { max-height:100px; max-width:150px; display:block; margin:6px 0; border-radius:6px; }
+    .text-button { border:0; background:none; color:var(--blue); padding:0; font-size:12px; cursor:pointer; }
+    .turnstile-box { margin-top:14px; padding:12px; border:1px solid var(--line); border-radius:9px; }
+    .turnstile-box[hidden] { display:none; }
+    .primary:disabled { opacity:.6; cursor:wait; }
+    .notice { margin-top:14px; padding:10px 12px; border-radius:9px; background:#fff7e5; color:#795411; font-size:12px; }
+    .status { min-height:18px; margin-top:9px; color:#176b43; font-size:13px; }
+    .severity-legend { display:flex; flex-wrap:wrap; gap:12px; padding:9px 16px; border-bottom:1px solid var(--line); font-size:12px; }
+    .legend-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+    .issue-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border:3px solid white; border-radius:50%; color:white; font-size:14px; font-weight:800; box-shadow:0 1px 5px #0003; }
+    .leaflet-popup-content { margin:12px 14px; min-width:170px; }
+    .popup-photo { display:block; max-width:220px; max-height:150px; object-fit:cover; border-radius:7px; margin-top:8px; }
+    .photo-trigger { display:block; padding:0; border:0; background:transparent; cursor:zoom-in; text-align:left; }
+    .photo-trigger:focus-visible { outline:3px solid #287be0; outline-offset:3px; }
+    .report-photo-thumb { display:block; width:76px; height:58px; object-fit:cover; border-radius:7px; margin-top:7px; }
+    .photo-dialog { max-width:min(94vw,1100px); max-height:94vh; border:0; border-radius:12px; padding:14px; background:#fff; box-shadow:0 12px 60px #0008; }
+    .photo-dialog::backdrop { background:rgba(0,0,0,.78); }
+    .photo-dialog img { display:block; max-width:100%; max-height:calc(85vh - 130px); width:auto; height:auto; object-fit:contain; margin:auto; }
+    .photo-gallery { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
+    .photo-gallery .photo-trigger { position:relative; }
+    .photo-gallery img { width:76px; height:58px; object-fit:cover; border-radius:7px; }
+    .photo-count { font-size:12px; color:var(--muted); }
+    .gallery-controls { display:flex; align-items:center; justify-content:center; gap:14px; margin-top:12px; }
+    .gallery-controls button { border:1px solid var(--line); background:white; border-radius:8px; padding:8px 14px; cursor:pointer; }
+    .gallery-controls button:disabled { opacity:.35; cursor:default; }
+    .remove-photo-button { border:1px solid #c8d4e1; background:white; color:#9a2626; border-radius:6px; padding:3px 7px; cursor:pointer; font-size:12px; }
+    .existing-photo-item { display:flex; flex-direction:column; align-items:flex-start; gap:5px; }
+    .existing-photo-item img { width:90px; height:65px; object-fit:cover; border-radius:6px; }
+    .photo-dialog-bar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:10px; }
+    .photo-dialog-close { border:1px solid var(--line); border-radius:8px; padding:6px 12px; background:white; cursor:pointer; }
+    @media(max-width:900px) { main { grid-template-columns:1fr; } #map { height:55vh; min-height:380px; } .panel { order:2; } }
+    @media(max-width:540px) { header { padding:15px; } .header-note { display:none; } main { padding:10px; gap:10px; } .panel { padding:16px; } #map { min-height:340px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><div class="brand-icon" aria-hidden="true">🚶</div><div><h1>Staunton Pedestrian Needs Map</h1><p class="tagline">Building safer streets in Staunton, Virginia</p></div></div>
+    <div class="header-note">Community pedestrian<br />infrastructure map</div>
+  </header>
+  <main>
+    <section class="map-card" aria-label="Interactive issue map">
+      <div class="map-top"><strong>Community issue map</strong><span>Click anywhere on the map to place a report pin</span></div>
+      <div class="severity-legend" aria-label="Severity legend"><span><i class="legend-dot" style="background:#23865c"></i>Low</span><span><i class="legend-dot" style="background:#e0a126"></i>Medium</span><span><i class="legend-dot" style="background:#d63f43"></i>High</span><span><i class="legend-dot" style="background:#78838e"></i>Not specified</span></div>
+      <div id="map" role="application" aria-label="Map for selecting an issue location"></div>
+      <div id="map-error" hidden role="alert" style="padding:12px 16px;background:#fff0e8;color:#843d1d;font-size:14px">Esri map tiles could not load. Press F12 → Network to inspect the failing request, or send us a screenshot.</div>
+    </section>
+    <aside class="panel">
+      <h2>Report an issue</h2>
+      <p class="intro">Help make walking safer and more accessible for everyone.</p>
+      <form id="report-form">
+        <div id="editing-note" class="editing-note" hidden>Editing an existing report. Save changes or cancel to return to new reports.</div>
+        <label for="issue-type">Issue type *</label>
+        <select id="issue-type" required>
+          <option value="">Choose an issue</option>
+          <option value="Sidewalk">Sidewalk</option>
+          <option value="Crosswalk">Crosswalk</option>
+          <option value="Lighting">Lighting</option>
+          <option value="Accessibility">Accessibility</option>
+          <option value="Broken pedestrian signal">Broken pedestrian signal</option>
+          <option value="Other">Other</option>
+        </select>
+        <label for="severity">Severity level *</label>
+        <select id="severity" required>
+          <option value="">Choose a severity level</option>
+          <option value="Low">Low — Minor inconvenience</option>
+          <option value="Medium">Medium — Significant obstacle</option>
+          <option value="High">High — Serious safety concern</option>
+        </select>
+        <label for="description">Description (optional)</label>
+        <textarea id="description" maxlength="800" placeholder="Describe what you noticed and how it affects people walking..."></textarea>
+        <label for="photo">Add photos (optional)</label>
+        <input id="photo" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+        <div class="hint">Choose up to 4 photos per report (JPG, PNG, or WebP; 1.5 MB maximum per photo). During editing, newly selected photos are added to the existing gallery.</div>
+        <div id="existing-photo" class="existing-photo" hidden></div>
+        <div id="photo-verification" class="turnstile-box">
+          <strong>Human verification for photo submissions</strong>
+          <p class="hint">Required only for new reports with photos; text-only reports do not require this check.</p>
+          <div class="cf-turnstile" data-sitekey="0x4AAAAAAFnVCQgir73yinKB"></div>
+        </div>
+        <label>Issue location *</label>
+        <div class="location-row"><span id="location-label">Click the map to choose a location</span><button type="button" id="clear-location">Clear</button></div>
+        <div class="hint">Tip: zoom in to your neighborhood first. You can also drag the pin after placing it.</div>
+        <div class="edit-actions"><button class="primary" id="submit-report" type="submit">Submit report</button><button class="secondary" id="cancel-edit" type="button" hidden>Cancel edit</button></div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </form>
+      <div class="section-head"><h3>Browse reports</h3><span class="report-count" id="report-count">0 reports</span></div>
+      <div class="filter-label">Filter by issue type</div>
+      <div class="filter-row" id="filters">
+        <button class="filter-chip active" type="button" data-filter="All">All</button>
+        <button class="filter-chip" type="button" data-filter="Sidewalk">Sidewalk</button>
+        <button class="filter-chip" type="button" data-filter="Crosswalk">Crosswalk</button>
+        <button class="filter-chip" type="button" data-filter="Lighting">Lighting</button>
+        <button class="filter-chip" type="button" data-filter="Accessibility">Accessibility</button>
+        <button class="filter-chip" type="button" data-filter="Broken pedestrian signal">Broken pedestrian signal</button>
+        <button class="filter-chip" type="button" data-filter="Other">Other</button>
+      </div>
+      <div class="filter-label">Filter by severity</div>
+      <div class="filter-row" id="severity-filters">
+        <button class="filter-chip active" type="button" data-severity="All">All severities</button>
+        <button class="filter-chip" type="button" data-severity="Low">Low</button>
+        <button class="filter-chip" type="button" data-severity="Medium">Medium</button>
+        <button class="filter-chip" type="button" data-severity="High">High</button>
+        <button class="filter-chip" type="button" data-severity="Unspecified">Not specified</button>
+      </div>
+      <div id="report-list"><div class="empty">No reports yet. Add the first one above.</div></div>
+      <div class="notice"><strong>Prototype note:</strong> New reports are submitted for review before appearing publicly. Photo submissions may be in a validation-only test mode during rollout. Older browser-local reports and their photos remain only on this browser. Do not include sensitive or identifying information.</div>
+    </aside>
+  </main>
+  <dialog id="photo-dialog" class="photo-dialog" aria-label="Enlarged report photo">
+    <div class="photo-dialog-bar"><strong id="photo-dialog-title">Report photo</strong><button type="button" class="photo-dialog-close" id="photo-dialog-close">Close ✕</button></div>
+    <img id="photo-dialog-image" alt="Enlarged photo attached to the selected report">
+    <div class="gallery-controls"><button id="photo-prev" type="button" aria-label="Previous photo">← Previous</button><span id="photo-position" aria-live="polite"></span><button id="photo-next" type="button" aria-label="Next photo">Next →</button></div>
+  </dialog>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    (() => {
+      const STORAGE_KEY = 'stronger-sidewalks-reports-v1';
+      const SUPABASE_URL = 'https://gygkdxiisugxvjcktkjt.supabase.co';
+      const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_aP48erzABmef587o09sLRQ_OW4UFyGC';
+      const supabaseClient = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_PUBLISHABLE_KEY
+);
+async function testSupabaseConnection() {
+  const { error } = await supabaseClient
+    .from('reports')
+    .select('id')
+    .limit(1);
+
+  if (error) {
+    console.error('Supabase connection error:', error);
+  } else {
+    console.log('Supabase connection successful!');
+  }
+}
+
+testSupabaseConnection();
+      const SEVERITY_COLORS = {
+        Low: '#23865c', Medium: '#e0a126', High: '#d63f43',
+        Unspecified: '#78838e'
+      };
+      const SYMBOLS = {
+        'Sidewalk': '▰', 'Crosswalk': '▥', 'Lighting': '☀',
+        'Accessibility': '♿', 'Broken pedestrian signal': '!', Other: '?'
+      };
+      const KNOWN_TYPES = new Set(Object.keys(SYMBOLS));
+      const severityColor = severity => SEVERITY_COLORS[severity] || SEVERITY_COLORS.Unspecified;
+      const map = L.map('map').setView([38.1496, -79.0717], 14);
+      const tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri and its data providers'
+      }).addTo(map);
+      tileLayer.on('tileload', () => {
+        const notice = document.getElementById('map-error');
+        if (notice) notice.hidden = true;
+      });
+      tileLayer.on('tileerror', () => {
+        const notice = document.getElementById('map-error');
+        if (notice) notice.hidden = false;
+      });
+      let selectedLocation = null;
+      let selectedPin = null;
+      let markers = [];
+      let supabaseMarkers = [];
+      let sharedReports = [];
+      let activeFilter = 'All';
+      let activeSeverity = 'All';
+      let editingId = null;
+      let removedPhotoIndexes = new Set();
+      let galleryReportId = null;
+      let sharedGalleryReport = null;
+      let sharedGalleryPhotos = [];
+      let galleryIndex = 0;
+      const MAX_PHOTOS = 4;
+      const MAX_PHOTO_BYTES = Math.floor(1.5 * 1024 * 1024);
+      const $ = id => document.getElementById(id);
+      // Backward-compatible: older reports stored a single string in "photo".
+      function reportPhotos(report) {
+        if (Array.isArray(report.photos)) return report.photos.filter(p => typeof p === 'string' && p.startsWith('data:image/'));
+        return typeof report.photo === 'string' && report.photo.startsWith('data:image/') ? [report.photo] : [];
+      }
+      function photoButtons(report, cssClass = 'report-photo-thumb') {
+        return reportPhotos(report).map((src, index) => `<button type="button" class="photo-trigger" data-photo-id="${safeText(report.id)}" data-photo-index="${index}" aria-label="Enlarge photo ${index + 1}"><img class="${cssClass}" src="${src}" alt="Report photo ${index + 1}" loading="lazy"></button>`).join('');
+      }
+
+      function loadReports() {
+        try { const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); return Array.isArray(parsed) ? parsed : []; }
+        catch { return []; }
+      }
+      let reports = loadReports();
+
+function renderSharedMarkers() {
+  // Remove previously displayed approved-report markers.
+  supabaseMarkers.forEach(marker => map.removeLayer(marker));
+  supabaseMarkers = [];
+
+  // Show only approved reports matching the active filters.
+  const visibleShared = sharedReports.filter(report => {
+    const typeMatch =
+      activeFilter === 'All' ||
+      report.type === activeFilter ||
+      (activeFilter === 'Other' && !KNOWN_TYPES.has(report.type));
+
+    const severityMatch =
+      activeSeverity === 'All' ||
+      report.severity === activeSeverity ||
+      (activeSeverity === 'Unspecified' &&
+        !['Low', 'Medium', 'High'].includes(report.severity));
+
+    return typeMatch && severityMatch;
+  });
+
+  visibleShared.forEach(report => {
+    const marker = L.marker([report.lat, report.lng], {
+      icon: makeIcon(report.type, report.severity)
+    }).addTo(map);
+
+    marker.reportId = String(report.id);
+
+    marker.bindPopup(`
+      <strong>${safeText(report.type)}</strong>
+      <div><strong>Severity:</strong> ${safeText(report.severity)}</div>
+      <p>${safeText(report.description || 'No description')}</p>
+      <small>Approved community report</small>
+      <div class="report-actions"><button class="text-button" type="button" data-shared-photos="${safeText(report.id)}">View approved photos</button></div>
+    `);
+
+    supabaseMarkers.push(marker);
+  });
+}
+
+async function loadApprovedReports() {
+  const { data, error } = await supabaseClient
+    .from('reports')
+    .select('id, type, severity, description, lat, lng, created_at')
+    .eq('status', 'approved');
+
+  if (error) {
+    console.error('Could not load approved reports:', error);
+    return;
+  }
+
+  console.log('Approved reports from Supabase:', data);
+sharedReports = data || [];
+renderReports();
+
+  // Refresh the approved reports on the map.
+  renderSharedMarkers();
+
+}
+loadApprovedReports();
+
+function persistReports() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(reports)); return true; }
+        catch (err) { $('status').textContent = 'Browser storage is full. Try a smaller photo or remove an old report.'; return false; }
+      }
+      function safeText(value) {
+        return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      }
+      function makeIcon(type, severity) {
+        const symbol = SYMBOLS[type] || SYMBOLS.Other;
+        const color = severityColor(severity);
+        return L.divIcon({
+          className: '',
+          html: `<div class="issue-icon" style="background:${color}">${safeText(symbol)}</div>`,
+          iconSize: [30,30], iconAnchor: [15,15], popupAnchor: [0,-14]
+        });
+      }
+      function formatDate(iso) {
+        try { return new Date(iso).toLocaleDateString(undefined, {month:'short',day:'numeric',year:'numeric'}); }
+        catch { return ''; }
+      }
+      function popupHtml(report) {
+        const photos = reportPhotos(report);
+        const photo = photos.length ? `<div class="photo-gallery">${photoButtons(report, 'popup-photo')}</div><div class="photo-count">${photos.length} photo${photos.length === 1 ? '' : 's'} · Click to enlarge</div>` : '';
+        return `<strong>${safeText(report.type)}</strong><div><strong>Severity:</strong> ${safeText(report.severity || 'Not specified')}</div><div>${safeText(report.description || 'No additional details provided.')}</div><small>${safeText(formatDate(report.createdAt))}</small>${photo}<div class="report-actions"><button type="button" class="text-button" data-edit="${safeText(report.id)}">Edit report</button></div>`;
+      }
+      function visibleReports() {
+        return reports.filter(r => {
+          const typeMatch = activeFilter === 'All' || r.type === activeFilter ||
+            (activeFilter === 'Other' && !KNOWN_TYPES.has(r.type));
+          const severityMatch = activeSeverity === 'All' ||
+            (activeSeverity === 'Unspecified' ? !['Low','Medium','High'].includes(r.severity) : r.severity === activeSeverity);
+          return typeMatch && severityMatch;
+        });
+      }
+      function syncFilters() {
+        document.querySelectorAll('#filters .filter-chip').forEach(b => b.classList.toggle('active', b.dataset.filter === activeFilter));
+        document.querySelectorAll('#severity-filters .filter-chip').forEach(b => b.classList.toggle('active', b.dataset.severity === activeSeverity));
+      }
+      function clearLocation() {
+        selectedLocation = null;
+        $('location-label').textContent = 'Click the map to choose a location';
+        if (selectedPin) map.removeLayer(selectedPin);
+        selectedPin = null;
+      }
+      function resetEditor() {
+        editingId = null;
+        $('report-form').reset();
+        clearLocation();
+        $('editing-note').hidden = true;
+        $('cancel-edit').hidden = true;
+        $('submit-report').textContent = 'Submit report';
+        $('existing-photo').hidden = true;
+        $('existing-photo').innerHTML = '';
+        removedPhotoIndexes = new Set();
+        $('status').textContent = '';
+      }
+      function resetTurnstile() {
+        try { if (window.turnstile) window.turnstile.reset(); } catch (err) { console.warn('Turnstile reset failed:', err); }
+      }
+      function renderExistingPhotos(report) {
+        const holder = $('existing-photo');
+        holder.innerHTML = '';
+        const label = document.createElement('div');
+        label.textContent = 'Current photos (remove individual photos or add more):';
+        holder.appendChild(label);
+        const gallery = document.createElement('div');
+        gallery.className = 'photo-gallery';
+        reportPhotos(report).forEach((src, index) => {
+          if (removedPhotoIndexes.has(index)) return;
+          const item = document.createElement('div');
+          item.className = 'existing-photo-item';
+          const img = document.createElement('img');
+          img.src = src; img.alt = `Existing photo ${index + 1}`;
+          const remove = document.createElement('button');
+          remove.type = 'button'; remove.className = 'remove-photo-button';
+          remove.textContent = 'Remove';
+          remove.addEventListener('click', () => {
+            removedPhotoIndexes.add(index);
+            renderExistingPhotos(report);
+          });
+          item.append(img, remove); gallery.appendChild(item);
+        });
+        holder.appendChild(gallery);
+        holder.hidden = reportPhotos(report).length === 0;
+      }
+      function beginEdit(id) {
+        const r = reports.find(item => String(item.id) === String(id));
+        if (!r) return;
+        resetEditor();
+        editingId = String(r.id);
+        $('issue-type').value = KNOWN_TYPES.has(r.type) ? r.type : 'Other';
+        $('severity').value = ['Low','Medium','High'].includes(r.severity) ? r.severity : '';
+        $('description').value = r.description || '';
+        chooseLocation(L.latLng(r.lat, r.lng));
+        const photos = reportPhotos(r);
+        if (photos.length) {
+          $('existing-photo').hidden = false;
+          renderExistingPhotos(r);
+        }
+        $('editing-note').hidden = false;
+        $('cancel-edit').hidden = false;
+        $('submit-report').textContent = 'Save changes';
+        $('report-form').scrollIntoView({behavior:'smooth', block:'start'});
+        $('issue-type').focus({preventScroll:true});
+      }
+      function showReport(id) {
+        const r = reports.find(item => String(item.id) === String(id));
+        if (!r) return;
+        // If a report is hidden by a filter, clear filters so its marker is visible.
+        if (!visibleReports().includes(r)) {
+          activeFilter = 'All'; activeSeverity = 'All'; syncFilters(); renderReports();
+        }
+        map.setView([r.lat, r.lng], Math.max(map.getZoom(),16));
+        const marker = markers.find(m => m.reportId === String(r.id));
+        if (marker) marker.openPopup();
+      }
+      
+function renderReports() {
+  // Keep the existing browser-local map markers.
+  markers.forEach(marker => map.removeLayer(marker));
+  markers = [];
+
+  const visible = visibleReports();
+
+  visible.forEach(report => {
+    const marker = L.marker([report.lat, report.lng], {
+      icon: makeIcon(report.type, report.severity),
+      draggable: false
+    }).addTo(map);
+
+    marker.reportId = String(report.id);
+    marker.bindPopup(popupHtml(report));
+    markers.push(marker);
+  });
+
+  // Filter approved Supabase reports separately.
+  const visibleShared = sharedReports.filter(report => {
+    const typeMatch =
+      activeFilter === 'All' ||
+      report.type === activeFilter ||
+      (activeFilter === 'Other' && !KNOWN_TYPES.has(report.type));
+
+    const severityMatch =
+      activeSeverity === 'All' ||
+      report.severity === activeSeverity;
+
+    return typeMatch && severityMatch;
+  });
+
+  // Update the Browse Reports count.
+  const totalReports = reports.length + sharedReports.length;
+  const visibleCount = visible.length + visibleShared.length;
+
+  $('report-count').textContent =
+    `${visibleCount} of ${totalReports} reports`;
+
+  // Local reports retain their Edit and Delete buttons.
+  const localHtml = visible.slice().reverse().map(r => `
+    <div class="report-item">
+      <span class="report-dot"
+        style="background:${severityColor(r.severity)}"></span>
+      <div style="flex:1;min-width:0">
+        <strong>${safeText(r.type)}</strong>
+        <p>
+          Severity: ${safeText(r.severity || 'Not specified')}
+          · ${safeText(r.description || 'No description')}
+          · ${safeText(formatDate(r.createdAt))}
+        </p>
+        ${reportPhotos(r).length
+          ? `<div class="photo-gallery">${photoButtons(r)}</div>
+             <span class="photo-count">${reportPhotos(r).length}
+             photo(s)</span>`
+          : ''}
+        <div class="report-actions">
+          <button class="text-button" type="button"
+            data-show="${safeText(r.id)}">View on map</button>
+          <button class="text-button" type="button"
+            data-edit="${safeText(r.id)}">Edit</button>
+          <button class="text-button" type="button"
+            data-delete="${safeText(r.id)}">Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Approved community reports are read-only.
+  const sharedHtml = visibleShared.slice().reverse().map(r => `
+    <div class="report-item">
+      <span class="report-dot"
+        style="background:${severityColor(r.severity)}"></span>
+      <div style="flex:1;min-width:0">
+        <strong>${safeText(r.type)}</strong>
+        <p>
+          Severity: ${safeText(r.severity)}
+          · ${safeText(r.description || 'No description')}
+          · ${safeText(formatDate(r.created_at))}
+        </p>
+        <p><strong>Approved community report</strong></p>
+        <div class="report-actions">
+          <button class="text-button" type="button"
+            data-show-shared="${safeText(r.id)}">
+            View on map
+          </button>
+          <button class="text-button" type="button"
+            data-shared-photos="${safeText(r.id)}">View approved photos</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  $('report-list').innerHTML =
+    localHtml + sharedHtml ||
+    '<div class="empty">No reports match this filter.</div>';
+}
+
+      function chooseLocation(latlng) {
+        selectedLocation = {lat:latlng.lat, lng:latlng.lng};
+        $('location-label').textContent = `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+        if (selectedPin) map.removeLayer(selectedPin);
+        selectedPin = L.marker(latlng, {draggable:true}).addTo(map).bindPopup('New report location — drag to adjust').openPopup();
+        selectedPin.on('dragend', e => chooseLocation(e.target.getLatLng()));
+      }
+      map.on('click', e => chooseLocation(e.latlng));
+      $('clear-location').addEventListener('click', clearLocation);
+      $('cancel-edit').addEventListener('click', resetEditor);
+      $('report-form').addEventListener('submit', async event => {
+        event.preventDefault(); $('status').textContent = '';
+        const type = $('issue-type').value;
+        if (!type) { $('status').textContent = 'Please choose an issue type.'; return; }
+        const severity = $('severity').value;
+        if (!['Low', 'Medium', 'High'].includes(severity)) { $('status').textContent = 'Please choose a severity level.'; return; }
+        if (!selectedLocation) { $('status').textContent = 'Please click the map to choose the issue location.'; return; }
+        const files = Array.from($('photo').files);
+        if (files.some(file => !['image/jpeg','image/png','image/webp'].includes(file.type))) {
+          $('status').textContent = 'Please choose only JPG, PNG, or WebP images.'; return;
+        }
+        if (files.some(file => file.size < 1 || file.size > MAX_PHOTO_BYTES)) {
+          $('status').textContent = 'Each photo must be under 1.5 MB.'; return;
+        }
+        const original = editingId === null ? null : reports.find(r => String(r.id) === editingId);
+        if (editingId !== null && !original) { $('status').textContent = 'Report no longer exists.'; return; }
+        const keptPhotos = original ? reportPhotos(original).filter((_, index) => !removedPhotoIndexes.has(index)) : [];
+        if (keptPhotos.length + files.length > MAX_PHOTOS) {
+          $('status').textContent = `A report can have up to ${MAX_PHOTOS} photos. Remove existing photos or select fewer new ones.`; return;
+        }
+                 // New photo reports go to the secure Edge Function, never to localStorage.
+         if (!original && files.length > 0) {
+           const siteKey = document.querySelector('.cf-turnstile')?.dataset.sitekey;
+           if (!siteKey || siteKey.startsWith('REPLACE_')) {
+             $('status').textContent = 'Photo verification is not configured yet. Contact the site administrator.';
+             return;
+           }
+           const token = $('report-form').querySelector('[name="cf-turnstile-response"]')?.value;
+           if (!token) {
+             $('status').textContent = 'Please complete the photo verification check first.';
+             return;
+           }
+           const data = new FormData();
+           data.append('type', type);
+           data.append('severity', severity);
+           data.append('description', $('description').value.trim());
+           data.append('lat', String(selectedLocation.lat));
+           data.append('lng', String(selectedLocation.lng));
+           data.append('cf-turnstile-response', token);
+           files.forEach(file => data.append('photos', file, file.name));
+           $('submit-report').disabled = true;
+           $('status').textContent = 'Submitting your photo report for approval...';
+           try {
+             const { data: result, error } = await supabaseClient.functions.invoke(
+               'submit-report-with-photos', { body: data }
+             );
+             if (error) {
+               let detail = '';
+               // Supabase functions errors may include a readable JSON response body.
+               try {
+                 const context = error.context;
+                 if (context && typeof context.json === 'function') {
+                   const body = await context.json();
+                   detail = typeof body?.error === 'string' ? body.error : '';
+                 }
+               } catch (ignored) { /* Fallback to a generic message. */ }
+               console.error('Photo report submission failed:', error);
+               $('status').textContent = detail || 'Could not submit your photo report. Please try again.';
+               return;
+             }
+             // A 200 response means the server validated ONLY; the report was NOT saved.
+             if (result?.uploadsEnabled !== true) {
+               $('status').textContent = 'Photo upload test passed, but saving is disabled. Your report was not submitted.';
+               return;
+             }
+             resetEditor();
+             $('status').textContent = 'Photo report submitted! It will appear publicly after review and approval.';
+             return;
+           } catch (error) {
+             console.error('Unexpected photo submission error:', error);
+             $('status').textContent = 'Could not submit your photo report. Please try again.';
+             return;
+           } finally {
+             $('submit-report').disabled = false;
+             resetTurnstile();
+           }
+         }
+
+         // The older browser-local editing workflow still handles photos locally.
+         let newPhotos;
+         try {
+           newPhotos = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+             const reader = new FileReader();
+             reader.onload = () => resolve(reader.result);
+             reader.onerror = reject;
+             reader.readAsDataURL(file);
+           })));
+         } catch {
+           $('status').textContent = 'Could not read one of the photos. Try again.'; return;
+         }
+         const photos = [...keptPhotos, ...newPhotos];
+
+// Send NEW reports without photos to Supabase for approval.
+        // Existing browser-local reports can still be edited locally.
+        if (!original && photos.length === 0) {
+          $('submit-report').disabled = true;
+          $('status').textContent = 'Submitting report for approval...';
+
+          try {
+            const { error } = await supabaseClient
+              .from('reports')
+              .insert({
+                type: type,
+                severity: severity,
+                description: $('description').value.trim(),
+                lat: selectedLocation.lat,
+                lng: selectedLocation.lng,
+                status: 'pending'
+              });
+
+            if (error) {
+              console.error('Report submission failed:', error);
+              $('status').textContent =
+                'Could not submit your report. Please try again.';
+              return;
+            }
+
+            resetEditor();
+            $('status').textContent =
+              'Report submitted successfully! It will appear publicly after approval.';
+            return;
+
+          } catch (error) {
+            console.error('Unexpected submission error:', error);
+            $('status').textContent =
+              'Could not submit your report. Please try again.';
+            return;
+
+          } finally {
+            $('submit-report').disabled = false;
+          }
+        }
+
+        const report = {
+          id: original ? original.id : (globalThis.crypto?.randomUUID?.() || String(Date.now()) + Math.random()),
+          type, severity, description:$('description').value.trim(), photos, photo:'',
+          lat:selectedLocation.lat, lng:selectedLocation.lng,
+          createdAt: original ? original.createdAt : new Date().toISOString(),
+          ...(original ? {updatedAt:new Date().toISOString()} : {})
+        };
+        const previousReports = reports;
+        reports = original ? reports.map(r => String(r.id) === editingId ? {...r, ...report} : r) : [...reports, report];
+        if (!persistReports()) { reports = previousReports; return; }
+        const wasEditing = Boolean(original);
+        resetEditor();
+        activeFilter = 'All'; activeSeverity = 'All'; syncFilters();
+        renderReports();
+        $('status').textContent = wasEditing ? 'Report updated in this browser.' : 'Report saved in this browser.';
+        if (!wasEditing) {
+          const marker = markers.find(m => m.reportId === String(report.id));
+          if (marker) marker.openPopup();
+        }
+      });
+      $('filters').addEventListener('click', event => {
+        const button = event.target.closest('[data-filter]'); if (!button) return;
+        activeFilter = button.dataset.filter;
+        syncFilters();
+        renderReports();
+        renderSharedMarkers();
+      });
+      $('severity-filters').addEventListener('click', event => {
+        const button = event.target.closest('[data-severity]'); if (!button) return;
+        activeSeverity = button.dataset.severity;
+syncFilters();
+renderReports();
+renderSharedMarkers();
+      });
+      function handleReportAction(event) {
+        const photoButton = event.target.closest('[data-shared-photos]');
+        if (photoButton) {
+          event.preventDefault();
+          openSharedPhotos(photoButton.dataset.sharedPhotos, photoButton);
+          return;
+        }
+        const edit = event.target.closest('[data-edit]');
+        if (edit) { beginEdit(edit.dataset.edit); return; }
+        const show = event.target.closest('[data-show]');
+        if (show) { showReport(show.dataset.show); return; }
+
+const showShared = event.target.closest('[data-show-shared]');
+
+if (showShared) {
+  const report = sharedReports.find(
+    r => String(r.id) === showShared.dataset.showShared
+  );
+
+  if (!report) return;
+
+  // Clear filters so the selected report is visible.
+  activeFilter = 'All';
+  activeSeverity = 'All';
+  syncFilters();
+  renderReports();
+renderSharedMarkers();
+  map.setView(
+    [report.lat, report.lng],
+    Math.max(map.getZoom(), 16)
+  );
+
+  const marker = supabaseMarkers.find(
+    m => m.reportId === String(report.id)
+  );
+
+  if (marker) marker.openPopup();
+  return;
+}
+
+        const del = event.target.closest('[data-delete]');
+        if (del) {
+          const r = reports.find(item => String(item.id) === del.dataset.delete);
+          if (!r || !confirm('Delete this report from this browser?')) return;
+          const previousReports = reports;
+          reports = reports.filter(item => String(item.id) !== String(r.id));
+          if (persistReports()) {
+            if (editingId === String(r.id)) resetEditor();
+            renderReports(); $('status').textContent = 'Report deleted.';
+          } else { reports = previousReports; }
+        }
+      }
+      // Fetch temporary URLs only when visitors request approved photos.
+      // URLs expire after 120 seconds and are never persisted to localStorage.
+      async function openSharedPhotos(id, button) {
+        const report = sharedReports.find(r => String(r.id) === String(id));
+        if (!report) return;
+        const previousLabel = button?.textContent;
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Loading photos...';
+        }
+        try {
+          const url = `${SUPABASE_URL}/functions/v1/get-approved-report-photos?report_id=${encodeURIComponent(id)}`;
+          const response = await fetch(url, {
+            headers: { apikey: SUPABASE_PUBLISHABLE_KEY },
+            cache: 'no-store'
+          });
+          if (!response.ok) throw new Error(`Photo request failed (${response.status})`);
+          const result = await response.json();
+          if (!Array.isArray(result.photos)) throw new Error('Unexpected photo response');
+          const photoUrls = result.photos
+            .filter(p => typeof p?.url === 'string' && p.url.startsWith('https://'))
+            .slice(0, 4).map(p => p.url);
+          if (!photoUrls.length) {
+            $('status').textContent = 'This approved report has no photos attached.';
+            return;
+          }
+          sharedGalleryReport = report;
+          sharedGalleryPhotos = photoUrls;
+          galleryReportId = null;
+          galleryIndex = 0;
+          showGalleryPhoto();
+          if (!$('photo-dialog').open) $('photo-dialog').showModal();
+        } catch (error) {
+          console.error('Could not retrieve approved photos:', error);
+          $('status').textContent = 'Could not load the approved photos. Please try again.';
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = previousLabel;
+          }
+        }
+      }
+
+      function showGalleryPhoto() {
+        const report = sharedGalleryReport || reports.find(r => String(r.id) === galleryReportId);
+        const photos = sharedGalleryReport ? sharedGalleryPhotos : (report ? reportPhotos(report) : []);
+        if (!report || !photos.length) return;
+        galleryIndex = Math.max(0, Math.min(galleryIndex, photos.length - 1));
+        $('photo-dialog-image').src = photos[galleryIndex];
+        $('photo-dialog-image').alt = `Enlarged report photo ${galleryIndex + 1} of ${photos.length}`;
+        $('photo-dialog-title').textContent = `${report.type} — ${report.severity || 'Not specified'} severity`;
+        $('photo-position').textContent = `${galleryIndex + 1} of ${photos.length}`;
+        $('photo-prev').disabled = galleryIndex === 0;
+        $('photo-next').disabled = galleryIndex === photos.length - 1;
+      }
+      function openReportPhoto(id, index = 0) {
+        const report = reports.find(r => String(r.id) === String(id));
+        if (!reportPhotos(report || {}).length) return;
+        sharedGalleryReport = null;
+        sharedGalleryPhotos = [];
+        galleryReportId = String(id);
+        galleryIndex = index;
+        showGalleryPhoto();
+        if (!$('photo-dialog').open) $('photo-dialog').showModal();
+      }
+      document.addEventListener('click', event => {
+        const trigger = event.target.closest('[data-photo-id]');
+        if (trigger) {
+          event.preventDefault();
+          openReportPhoto(trigger.dataset.photoId, Number(trigger.dataset.photoIndex) || 0);
+        }
+      });
+      $('photo-prev').addEventListener('click', () => { galleryIndex--; showGalleryPhoto(); });
+      $('photo-next').addEventListener('click', () => { galleryIndex++; showGalleryPhoto(); });
+      $('photo-dialog').addEventListener('keydown', event => {
+        if (event.key === 'ArrowLeft' && !$('photo-prev').disabled) { event.preventDefault(); galleryIndex--; showGalleryPhoto(); }
+        if (event.key === 'ArrowRight' && !$('photo-next').disabled) { event.preventDefault(); galleryIndex++; showGalleryPhoto(); }
+      });
+      $('photo-dialog-close').addEventListener('click', () => $('photo-dialog').close());
+      $('photo-dialog').addEventListener('click', event => {
+        if (event.target === $('photo-dialog')) $('photo-dialog').close();
+      });
+      $('photo-dialog').addEventListener('close', () => {
+        $('photo-dialog-image').removeAttribute('src');
+        galleryReportId = null;
+        sharedGalleryReport = null;
+        sharedGalleryPhotos = [];
+      });
+      $('report-list').addEventListener('click', handleReportAction);
+      map.on('popupopen', e => {
+        const node = e.popup.getElement();
+        if (node) node.addEventListener('click', handleReportAction);
+      });
+      renderReports();
+    })();
+  </script>
+</body>
+</html>
