@@ -125,7 +125,7 @@
         <textarea id="description" maxlength="800" placeholder="Describe what you noticed and how it affects people walking..."></textarea>
         <label for="photo">Add photos (optional)</label>
         <input id="photo" type="file" accept="image/png,image/jpeg,image/webp" multiple />
-        <div class="hint">Choose up to 4 photos per report (JPG, PNG, or WebP; 1.5 MB maximum per photo). During editing, newly selected photos are added to the existing gallery.</div>
+        <div class="hint">Choose up to 4 photos per report (JPG, PNG, or WebP; 5 MB maximum per photo). During editing, newly selected photos are added to the existing gallery.</div>
         <div id="existing-photo" class="existing-photo" hidden></div>
         <div id="photo-verification" class="turnstile-box">
           <strong>Human verification for photo submissions</strong>
@@ -229,7 +229,7 @@ testSupabaseConnection();
       let sharedGalleryPhotos = [];
       let galleryIndex = 0;
       const MAX_PHOTOS = 4;
-      const MAX_PHOTO_BYTES = Math.floor(1.5 * 1024 * 1024);
+      const MAX_PHOTO_BYTES = Math.floor(5 * 1024 * 1024);
       const $ = id => document.getElementById(id);
       // Backward-compatible: older reports stored a single string in "photo".
       function reportPhotos(report) {
@@ -544,7 +544,7 @@ function renderReports() {
           $('status').textContent = 'Please choose only JPG, PNG, or WebP images.'; return;
         }
         if (files.some(file => file.size < 1 || file.size > MAX_PHOTO_BYTES)) {
-          $('status').textContent = 'Each photo must be under 1.5 MB.'; return;
+          $('status').textContent = 'Each photo must be under 5 MB.'; return;
         }
         const original = editingId === null ? null : reports.find(r => String(r.id) === editingId);
         if (editingId !== null && !original) { $('status').textContent = 'Report no longer exists.'; return; }
