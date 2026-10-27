@@ -150,7 +150,7 @@
         <button class="filter-chip" type="button" data-severity="Unspecified">Not specified</button>
       </div>
       <div id="report-list"><div class="empty">No reports yet. Add the first one above.</div></div>
-      <div class="notice"><strong>Prototype note:</strong> Reports and photos are saved only in this browser. They are not visible to other people and may be cleared by browser settings. Don't upload sensitive or identifying photos.</div>
+      <div class="notice"><strong>Prototype note:</strong> New reports without photos are submitted for review before appearing publicly. New photo submissions are temporarily unavailable while security work is completed. Older browser-local reports and their photos remain only on this browser. Do not include sensitive or identifying information.</div>
     </aside>
   </main>
   <dialog id="photo-dialog" class="photo-dialog" aria-label="Enlarged report photo">
@@ -158,10 +158,31 @@
     <img id="photo-dialog-image" alt="Enlarged photo attached to the selected report">
     <div class="gallery-controls"><button id="photo-prev" type="button" aria-label="Previous photo">← Previous</button><span id="photo-position" aria-live="polite"></span><button id="photo-next" type="button" aria-label="Next photo">Next →</button></div>
   </dialog>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
     (() => {
       const STORAGE_KEY = 'stronger-sidewalks-reports-v1';
+      const SUPABASE_URL = 'https://gygkdxiisugxvjcktkjt.supabase.co';
+      const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_aP48erzABmef587o09sLRQ_OW4UFyGC';
+      const supabaseClient = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_PUBLISHABLE_KEY
+);
+async function testSupabaseConnection() {
+  const { error } = await supabaseClient
+    .from('reports')
+    .select('id')
+    .limit(1);
+
+  if (error) {
+    console.error('Supabase connection error:', error);
+  } else {
+    console.log('Supabase connection successful!');
+  }
+}
+
+testSupabaseConnection();
       const SEVERITY_COLORS = {
         Low: '#23865c', Medium: '#e0a126', High: '#d63f43',
         Unspecified: '#78838e'
@@ -188,11 +209,15 @@
       let selectedLocation = null;
       let selectedPin = null;
       let markers = [];
+      let supabaseMarkers = [];
+      let sharedReports = [];
       let activeFilter = 'All';
       let activeSeverity = 'All';
       let editingId = null;
       let removedPhotoIndexes = new Set();
       let galleryReportId = null;
+      let sharedGalleryReport = null;
+      let sharedGalleryPhotos = [];
       let galleryIndex = 0;
       const MAX_PHOTOS = 4;
       const $ = id => document.getElementById(id);
@@ -210,6 +235,89 @@
         catch { return []; }
       }
       let reports = loadReports();
+
+function renderSharedMarkers() {
+  // Remove previously displayed approved-report markers.
+  supabaseMarkers.forEach(marker => map.removeLayer(marker));
+  supabaseMarkers = [];
+
+  // Show only approved reports matching the active filters.
+  const visibleShared = sharedReports.filter(report => {
+    const typeMatch =
+      activeFilter === 'All' ||
+      report.type === activeFilter ||
+      (activeFilter === 'Other' && !KNOWN_TYPES.has(report.type));
+
+    const severityMatch =
+      activeSeverity === 'All' ||
+      report.severity === activeSeverity ||
+      (activeSeverity === 'Unspecified' &&
+        !['Low', 'Medium', 'High'].includes(report.severity));
+
+    return typeMatch && severityMatch;
+  });
+
+  visibleShared.forEach(report => {
+    const marker = L.marker([report.lat, report.lng], {
+      icon: makeIcon(report.type, report.severity)
+    }).addTo(map);
+
+    marker.reportId = String(report.id);
+
+    marker.bindPopup(`
+      <strong>${safeText(report.type)}</strong>
+      <div><strong>Severity:</strong> ${safeText(report.severity)}</div>
+      <p>${safeText(report.description || 'No description')}</p>
+      <small>Approved community report</small>
+      <div class="report-actions"><button class="text-button" type="button" data-shared-photos="${safeText(report.id)}">View approved photos</button></div>
+    `);
+
+    supabaseMarkers.push(marker);
+  });
+}
+
+async function loadApprovedReports() {
+  const { data, error } = await supabaseClient
+    .from('reports')
+    .select('id, type, severity, description, lat, lng, created_at')
+    .eq('status', 'approved');
+
+  if (error) {
+    console.error('Could not load approved reports:', error);
+    return;
+  }
+
+  console.log('Approved reports from Supabase:', data);
+sharedReports = data || [];
+renderReports();
+
+  // Refresh the approved reports on the map.
+  renderSharedMarkers();
+
+}
+loadApprovedReports();
+
+async function testPendingReportSubmission() {
+  const { error } = await supabaseClient
+    .from('reports')
+    .insert({
+      type: 'Sidewalk',
+      severity: 'Low',
+      description: 'TEST PENDING REPORT - Checking public submissions',
+      lat: 38.1496,
+      lng: -79.0717,
+      status: 'pending'
+    });
+
+  if (error) {
+    console.error('Test submission failed:', error);
+  } else {
+    console.log('Pending report submitted successfully!');
+  }
+}
+
+window.testPendingReportSubmission = testPendingReportSubmission;
+
       function persistReports() {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(reports)); return true; }
         catch (err) { $('status').textContent = 'Browser storage is full. Try a smaller photo or remove an old report.'; return false; }
@@ -323,18 +431,105 @@
         const marker = markers.find(m => m.reportId === String(r.id));
         if (marker) marker.openPopup();
       }
-      function renderReports() {
-        markers.forEach(marker => map.removeLayer(marker)); markers = [];
-        const visible = visibleReports();
-        visible.forEach(report => {
-          const marker = L.marker([report.lat, report.lng], {icon:makeIcon(report.type, report.severity), draggable:false}).addTo(map);
-          marker.reportId = String(report.id);
-          marker.bindPopup(popupHtml(report)); markers.push(marker);
-        });
-        $('report-count').textContent = `${visible.length} of ${reports.length} reports`;
-        $('report-list').innerHTML = visible.length ? visible.slice().reverse().map(r => `
-          <div class="report-item"><span class="report-dot" style="background:${severityColor(r.severity)}"></span><div style="flex:1;min-width:0"><strong>${safeText(r.type)}</strong><p>Severity: ${safeText(r.severity || 'Not specified')} · ${safeText(r.description || 'No description')} · ${safeText(formatDate(r.createdAt))}</p>${reportPhotos(r).length ? `<div class="photo-gallery">${photoButtons(r)}</div><span class="photo-count">${reportPhotos(r).length} photo${reportPhotos(r).length === 1 ? '' : 's'}</span>` : ''}<div class="report-actions"><button class="text-button" type="button" data-show="${safeText(r.id)}">View on map</button><button class="text-button" type="button" data-edit="${safeText(r.id)}">Edit</button><button class="text-button" type="button" data-delete="${safeText(r.id)}">Delete</button></div></div></div>`).join('') : '<div class="empty">No reports match this filter.</div>';
-      }
+      
+function renderReports() {
+  // Keep the existing browser-local map markers.
+  markers.forEach(marker => map.removeLayer(marker));
+  markers = [];
+
+  const visible = visibleReports();
+
+  visible.forEach(report => {
+    const marker = L.marker([report.lat, report.lng], {
+      icon: makeIcon(report.type, report.severity),
+      draggable: false
+    }).addTo(map);
+
+    marker.reportId = String(report.id);
+    marker.bindPopup(popupHtml(report));
+    markers.push(marker);
+  });
+
+  // Filter approved Supabase reports separately.
+  const visibleShared = sharedReports.filter(report => {
+    const typeMatch =
+      activeFilter === 'All' ||
+      report.type === activeFilter ||
+      (activeFilter === 'Other' && !KNOWN_TYPES.has(report.type));
+
+    const severityMatch =
+      activeSeverity === 'All' ||
+      report.severity === activeSeverity;
+
+    return typeMatch && severityMatch;
+  });
+
+  // Update the Browse Reports count.
+  const totalReports = reports.length + sharedReports.length;
+  const visibleCount = visible.length + visibleShared.length;
+
+  $('report-count').textContent =
+    `${visibleCount} of ${totalReports} reports`;
+
+  // Local reports retain their Edit and Delete buttons.
+  const localHtml = visible.slice().reverse().map(r => `
+    <div class="report-item">
+      <span class="report-dot"
+        style="background:${severityColor(r.severity)}"></span>
+      <div style="flex:1;min-width:0">
+        <strong>${safeText(r.type)}</strong>
+        <p>
+          Severity: ${safeText(r.severity || 'Not specified')}
+          · ${safeText(r.description || 'No description')}
+          · ${safeText(formatDate(r.createdAt))}
+        </p>
+        ${reportPhotos(r).length
+          ? `<div class="photo-gallery">${photoButtons(r)}</div>
+             <span class="photo-count">${reportPhotos(r).length}
+             photo(s)</span>`
+          : ''}
+        <div class="report-actions">
+          <button class="text-button" type="button"
+            data-show="${safeText(r.id)}">View on map</button>
+          <button class="text-button" type="button"
+            data-edit="${safeText(r.id)}">Edit</button>
+          <button class="text-button" type="button"
+            data-delete="${safeText(r.id)}">Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Approved community reports are read-only.
+  const sharedHtml = visibleShared.slice().reverse().map(r => `
+    <div class="report-item">
+      <span class="report-dot"
+        style="background:${severityColor(r.severity)}"></span>
+      <div style="flex:1;min-width:0">
+        <strong>${safeText(r.type)}</strong>
+        <p>
+          Severity: ${safeText(r.severity)}
+          · ${safeText(r.description || 'No description')}
+          · ${safeText(formatDate(r.created_at))}
+        </p>
+        <p><strong>Approved community report</strong></p>
+        <div class="report-actions">
+          <button class="text-button" type="button"
+            data-show-shared="${safeText(r.id)}">
+            View on map
+          </button>
+          <button class="text-button" type="button"
+            data-shared-photos="${safeText(r.id)}">View approved photos</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  $('report-list').innerHTML =
+    localHtml + sharedHtml ||
+    '<div class="empty">No reports match this filter.</div>';
+}
+
       function chooseLocation(latlng) {
         selectedLocation = {lat:latlng.lat, lng:latlng.lng};
         $('location-label').textContent = `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
@@ -377,6 +572,53 @@
           $('status').textContent = 'Could not read one of the photos. Try again.'; return;
         }
         const photos = [...keptPhotos, ...newPhotos];
+
+        if (!original && photos.length > 0) {
+          $('status').textContent = 'New photo submissions are not enabled yet. Remove the photos to send this report for approval.';
+          return;
+        }
+
+        // Send NEW reports without photos to Supabase for approval.
+        // Existing browser-local reports can still be edited locally.
+        if (!original && photos.length === 0) {
+          $('submit-report').disabled = true;
+          $('status').textContent = 'Submitting report for approval...';
+
+          try {
+            const { error } = await supabaseClient
+              .from('reports')
+              .insert({
+                type: type,
+                severity: severity,
+                description: $('description').value.trim(),
+                lat: selectedLocation.lat,
+                lng: selectedLocation.lng,
+                status: 'pending'
+              });
+
+            if (error) {
+              console.error('Report submission failed:', error);
+              $('status').textContent =
+                'Could not submit your report. Please try again.';
+              return;
+            }
+
+            resetEditor();
+            $('status').textContent =
+              'Report submitted successfully! It will appear publicly after approval.';
+            return;
+
+          } catch (error) {
+            console.error('Unexpected submission error:', error);
+            $('status').textContent =
+              'Could not submit your report. Please try again.';
+            return;
+
+          } finally {
+            $('submit-report').disabled = false;
+          }
+        }
+
         const report = {
           id: original ? original.id : (globalThis.crypto?.randomUUID?.() || String(Date.now()) + Math.random()),
           type, severity, description:$('description').value.trim(), photos, photo:'',
@@ -399,17 +641,58 @@
       });
       $('filters').addEventListener('click', event => {
         const button = event.target.closest('[data-filter]'); if (!button) return;
-        activeFilter = button.dataset.filter; syncFilters(); renderReports();
+        activeFilter = button.dataset.filter;
+        syncFilters();
+        renderReports();
+        renderSharedMarkers();
       });
       $('severity-filters').addEventListener('click', event => {
         const button = event.target.closest('[data-severity]'); if (!button) return;
-        activeSeverity = button.dataset.severity; syncFilters(); renderReports();
+        activeSeverity = button.dataset.severity;
+syncFilters();
+renderReports();
+renderSharedMarkers();
       });
       function handleReportAction(event) {
+        const photoButton = event.target.closest('[data-shared-photos]');
+        if (photoButton) {
+          event.preventDefault();
+          openSharedPhotos(photoButton.dataset.sharedPhotos, photoButton);
+          return;
+        }
         const edit = event.target.closest('[data-edit]');
         if (edit) { beginEdit(edit.dataset.edit); return; }
         const show = event.target.closest('[data-show]');
         if (show) { showReport(show.dataset.show); return; }
+
+const showShared = event.target.closest('[data-show-shared]');
+
+if (showShared) {
+  const report = sharedReports.find(
+    r => String(r.id) === showShared.dataset.showShared
+  );
+
+  if (!report) return;
+
+  // Clear filters so the selected report is visible.
+  activeFilter = 'All';
+  activeSeverity = 'All';
+  syncFilters();
+  renderReports();
+renderSharedMarkers();
+  map.setView(
+    [report.lat, report.lng],
+    Math.max(map.getZoom(), 16)
+  );
+
+  const marker = supabaseMarkers.find(
+    m => m.reportId === String(report.id)
+  );
+
+  if (marker) marker.openPopup();
+  return;
+}
+
         const del = event.target.closest('[data-delete]');
         if (del) {
           const r = reports.find(item => String(item.id) === del.dataset.delete);
@@ -422,10 +705,53 @@
           } else { reports = previousReports; }
         }
       }
+      // Fetch temporary URLs only when visitors request approved photos.
+      // URLs expire after 120 seconds and are never persisted to localStorage.
+      async function openSharedPhotos(id, button) {
+        const report = sharedReports.find(r => String(r.id) === String(id));
+        if (!report) return;
+        const previousLabel = button?.textContent;
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Loading photos...';
+        }
+        try {
+          const url = `${SUPABASE_URL}/functions/v1/get-approved-report-photos?report_id=${encodeURIComponent(id)}`;
+          const response = await fetch(url, {
+            headers: { apikey: SUPABASE_PUBLISHABLE_KEY },
+            cache: 'no-store'
+          });
+          if (!response.ok) throw new Error(`Photo request failed (${response.status})`);
+          const result = await response.json();
+          if (!Array.isArray(result.photos)) throw new Error('Unexpected photo response');
+          const photoUrls = result.photos
+            .filter(p => typeof p?.url === 'string' && p.url.startsWith('https://'))
+            .slice(0, 4).map(p => p.url);
+          if (!photoUrls.length) {
+            $('status').textContent = 'This approved report has no photos attached.';
+            return;
+          }
+          sharedGalleryReport = report;
+          sharedGalleryPhotos = photoUrls;
+          galleryReportId = null;
+          galleryIndex = 0;
+          showGalleryPhoto();
+          if (!$('photo-dialog').open) $('photo-dialog').showModal();
+        } catch (error) {
+          console.error('Could not retrieve approved photos:', error);
+          $('status').textContent = 'Could not load the approved photos. Please try again.';
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = previousLabel;
+          }
+        }
+      }
+
       function showGalleryPhoto() {
-        const report = reports.find(r => String(r.id) === galleryReportId);
-        const photos = report ? reportPhotos(report) : [];
-        if (!photos.length) return;
+        const report = sharedGalleryReport || reports.find(r => String(r.id) === galleryReportId);
+        const photos = sharedGalleryReport ? sharedGalleryPhotos : (report ? reportPhotos(report) : []);
+        if (!report || !photos.length) return;
         galleryIndex = Math.max(0, Math.min(galleryIndex, photos.length - 1));
         $('photo-dialog-image').src = photos[galleryIndex];
         $('photo-dialog-image').alt = `Enlarged report photo ${galleryIndex + 1} of ${photos.length}`;
@@ -437,6 +763,8 @@
       function openReportPhoto(id, index = 0) {
         const report = reports.find(r => String(r.id) === String(id));
         if (!reportPhotos(report || {}).length) return;
+        sharedGalleryReport = null;
+        sharedGalleryPhotos = [];
         galleryReportId = String(id);
         galleryIndex = index;
         showGalleryPhoto();
@@ -462,6 +790,8 @@
       $('photo-dialog').addEventListener('close', () => {
         $('photo-dialog-image').removeAttribute('src');
         galleryReportId = null;
+        sharedGalleryReport = null;
+        sharedGalleryPhotos = [];
       });
       $('report-list').addEventListener('click', handleReportAction);
       map.on('popupopen', e => {
