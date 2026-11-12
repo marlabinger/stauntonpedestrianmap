@@ -83,6 +83,25 @@
     .existing-photo-item img { width:90px; height:65px; object-fit:cover; border-radius:6px; }
     .photo-dialog-bar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:10px; }
     .photo-dialog-close { border:1px solid var(--line); border-radius:8px; padding:6px 12px; background:white; cursor:pointer; }
+
+    /* Welcome and About dialogs: visual-only additions, separate from map logic. */
+    .about-button { flex:0 0 auto; border:1px solid rgba(255,255,255,.7); border-radius:9px; padding:9px 13px; color:white; background:transparent; cursor:pointer; font-weight:650; }
+    .about-button:hover,.about-button:focus-visible { background:rgba(255,255,255,.15); }
+    .info-dialog { width:min(92vw,610px); max-height:min(88vh,780px); overflow:auto; border:0; border-radius:17px; padding:0; color:var(--ink); background:white; box-shadow:0 18px 65px #0005; }
+    .info-dialog::backdrop { background:rgba(13,30,44,.67); }
+    .info-dialog-content { padding:clamp(20px,4vw,32px); }
+    .info-dialog h2 { margin:0 0 10px; font-size:clamp(22px,4vw,28px); line-height:1.2; }
+    .info-dialog h3 { margin:22px 0 7px; font-size:17px; }
+    .info-dialog p { margin:10px 0; line-height:1.6; }
+    .info-kicker { color:#276749; font-weight:750; font-size:13px; letter-spacing:.025em; }
+    .info-callout { margin:18px 0; padding:14px 16px; border-left:4px solid #276749; background:#f0f7f2; border-radius:8px; font-size:14px; }
+    .info-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:22px; }
+    .info-actions button { border-radius:9px; padding:11px 16px; font-weight:700; cursor:pointer; }
+    .info-main { border:0; color:white; background:#276749; }
+    .info-main:hover { background:#1c5237; }
+    .info-secondary { border:1px solid var(--line); color:var(--ink); background:white; }
+    .info-close { float:right; border:0; background:transparent; color:var(--ink); font-size:24px; cursor:pointer; padding:0 2px 3px 12px; }
+    @media(max-width:540px) { header { flex-wrap:wrap; } .about-button { font-size:12px; padding:7px 10px; } .info-actions button { flex:1; } }
     @media(max-width:900px) { main { grid-template-columns:1fr; } #map { height:55vh; min-height:380px; } .panel { order:2; } }
     @media(max-width:540px) { header { padding:15px; } .header-note { display:none; } main { padding:10px; gap:10px; } .panel { padding:16px; } #map { min-height:340px; } }
   </style>
@@ -90,6 +109,7 @@
 <body>
   <header>
     <div class="brand"><div class="brand-icon" aria-hidden="true">🚶</div><div><h1>Staunton Pedestrian Needs Map</h1><p class="tagline">Building safer streets in Staunton, Virginia</p></div></div>
+    <button class="about-button" type="button" id="open-about" aria-haspopup="dialog">About &amp; Disclaimer</button>
     <div class="header-note">Community pedestrian<br />infrastructure map</div>
   </header>
   <main>
@@ -161,6 +181,44 @@
 <div class="notice"><strong>Note:</strong> All reports are reviewed before appearing on the public map. Please provide accurate information and avoid including personal or sensitive details in descriptions or photographs. Thank you for helping make Staunton safer and more accessible for everyone!</div>
     </aside>
   </main>
+  <!-- This short welcome is shown once per browser until browser data is cleared. -->
+  <dialog id="welcome-dialog" class="info-dialog" aria-labelledby="welcome-title">
+    <div class="info-dialog-content">
+      <div class="info-kicker">🚶 STAUNTON WALKS</div>
+      <h2 id="welcome-title">Welcome to Staunton Walks!</h2>
+      <p><strong>Your observations can help inform real pedestrian improvements.</strong></p>
+      <p>Staunton Walks gathers community reports of sidewalk damage, faded crosswalks, accessibility barriers, and other walking concerns in Staunton, Virginia.</p>
+      <p>The goal is to organize this information and share it with City of Staunton Public Works staff to help identify potential maintenance needs and improvements.</p>
+      <div class="info-callout"><strong>Important:</strong> Staunton Walks is an independent community initiative, not an official City of Staunton reporting channel. Submitting a report does not guarantee an inspection, repair, or improvement.</div>
+      <div class="info-actions">
+        <button class="info-main" type="button" id="welcome-continue">Explore the map</button>
+        <button class="info-secondary" type="button" id="welcome-read-more">Read about the project</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- The full explanation can be reopened at any time from the header. -->
+  <dialog id="about-dialog" class="info-dialog" aria-labelledby="about-title">
+    <div class="info-dialog-content">
+      <button class="info-close" id="about-close-x" type="button" aria-label="Close About and Disclaimer">×</button>
+      <div class="info-kicker">ABOUT THE PROJECT</div>
+      <h2 id="about-title">About Staunton Walks</h2>
+      <p><strong>Helping identify pedestrian infrastructure needs and connect community observations with opportunities for improvement.</strong></p>
+      <p>Staunton Walks is an independent, community-driven project dedicated to making Staunton, Virginia, safer, more accessible, and more enjoyable for people walking throughout our city.</p>
+      <p>Residents and visitors can report damaged sidewalks, faded crosswalks, accessibility barriers, pedestrian signal problems, and other conditions that affect walkability. Reports and photographs help build a clearer picture of areas that may need attention.</p>
+      <h3>Turning community observations into action</h3>
+      <p>Staunton Walks was created by a member of the Staunton Bicycle &amp; Pedestrian Advisory Committee following conversations with City of Staunton Public Works staff about opportunities to improve pedestrian infrastructure.</p>
+      <p>Public Works staff have expressed interest in addressing sidewalk and crosswalk maintenance needs. The goal is to organize community-generated information and share it with Public Works staff to help inform maintenance priorities and identify possible repairs and improvements.</p>
+      <h3>Important disclaimer</h3>
+      <div class="info-callout"><strong>Staunton Walks is not an official City of Staunton website, reporting channel, or service-request system.</strong> It is independently created and is not operated or endorsed by the City.</div>
+      <p>Information collected through Staunton Walks may be shared with Public Works staff, but submitting a report does not guarantee that a location will be inspected, repaired, funded, or prioritized. The appropriate public agencies retain responsibility for maintenance and infrastructure decisions.</p>
+      <p>Reports are reviewed before being shown on the public map. Report descriptions and photographs may become publicly visible and may be shared with Public Works staff; please do not include personal or sensitive information in them.</p>
+      <p>For urgent hazards or issues requiring an official response, please contact the City of Staunton through its established channels. For emergencies, call 911.</p>
+      <h3>Thank you for contributing!</h3>
+      <p>Every observation helps make pedestrian infrastructure needs more visible and supports informed conversations about a more walkable Staunton.</p>
+      <div class="info-actions"><button class="info-main" type="button" id="about-done">Back to the map</button></div>
+    </div>
+  </dialog>
   <dialog id="photo-dialog" class="photo-dialog" aria-label="Enlarged report photo">
     <div class="photo-dialog-bar"><strong id="photo-dialog-title">Report photo</strong><button type="button" class="photo-dialog-close" id="photo-dialog-close">Close ✕</button></div>
     <img id="photo-dialog-image" alt="Enlarged photo attached to the selected report">
@@ -910,6 +968,30 @@ renderSharedMarkers();
         if (node) node.addEventListener('click', handleReportAction);
       });
       renderReports();
+    })();
+  </script>
+  <script>
+    // Welcome/About controls are isolated from the reporting and photo scripts.
+    (() => {
+      const welcome = document.getElementById('welcome-dialog');
+      const about = document.getElementById('about-dialog');
+      const welcomeKey = 'staunton-walks-welcome-seen-v1';
+      const markWelcomeSeen = () => {
+        try { localStorage.setItem(welcomeKey, 'yes'); } catch (error) { /* Private browsing may deny storage. */ }
+      };
+      const openAbout = () => {
+        if (welcome.open) { markWelcomeSeen(); welcome.close(); }
+        if (!about.open) about.showModal();
+      };
+      document.getElementById('open-about').addEventListener('click', openAbout);
+      document.getElementById('welcome-continue').addEventListener('click', () => welcome.close());
+      document.getElementById('welcome-read-more').addEventListener('click', openAbout);
+      document.getElementById('about-close-x').addEventListener('click', () => about.close());
+      document.getElementById('about-done').addEventListener('click', () => about.close());
+      welcome.addEventListener('close', markWelcomeSeen);
+      try {
+        if (localStorage.getItem(welcomeKey) !== 'yes') welcome.showModal();
+      } catch (error) { welcome.showModal(); }
     })();
   </script>
 </body>
