@@ -60,9 +60,10 @@
     .primary:disabled { opacity:.6; cursor:wait; }
     .notice { margin-top:14px; padding:10px 12px; border-radius:9px; background:#fff7e5; color:#795411; font-size:12px; }
     .status { min-height:18px; margin-top:9px; color:#176b43; font-size:13px; }
-    .severity-legend { display:flex; flex-wrap:wrap; gap:12px; padding:9px 16px; border-bottom:1px solid var(--line); font-size:12px; }
+    .type-legend { display:flex; flex-wrap:wrap; gap:9px 14px; padding:10px 16px; border-bottom:1px solid var(--line); font-size:12px; }
     .legend-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px; vertical-align:middle; }
     .issue-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border:3px solid white; border-radius:50%; color:white; font-size:14px; font-weight:800; box-shadow:0 1px 5px #0003; }
+    .issue-icon svg { display:block; width:19px; height:19px; fill:none; stroke:#fff; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
     .leaflet-popup-content { margin:12px 14px; min-width:170px; }
     .popup-photo { display:block; max-width:220px; max-height:150px; object-fit:cover; border-radius:7px; margin-top:8px; }
     .photo-trigger { display:block; padding:0; border:0; background:transparent; cursor:zoom-in; text-align:left; }
@@ -115,7 +116,7 @@
   <main>
     <section class="map-card" aria-label="Interactive issue map">
       <div class="map-top"><strong>Community issue map</strong><span>Click anywhere on the map to place a report pin</span></div>
-      <div class="severity-legend" aria-label="Severity legend"><span><i class="legend-dot" style="background:#23865c"></i>Low</span><span><i class="legend-dot" style="background:#e0a126"></i>Medium</span><span><i class="legend-dot" style="background:#d63f43"></i>High</span><span><i class="legend-dot" style="background:#78838e"></i>Not specified</span></div>
+      <div class="type-legend" aria-label="Issue type legend"><span><i class="legend-dot" style="background:#276749"></i>Sidewalk</span><span><i class="legend-dot" style="background:#2563eb"></i>Crosswalk</span><span><i class="legend-dot" style="background:#b7791f"></i>Lighting</span><span><i class="legend-dot" style="background:#7c3aed"></i>Accessibility</span><span><i class="legend-dot" style="background:#c2413b"></i>Pedestrian signal</span><span><i class="legend-dot" style="background:#64748b"></i>Other</span></div>
       <div id="map" role="application" aria-label="Map for selecting an issue location"></div>
       <div id="map-error" hidden role="alert" style="padding:12px 16px;background:#fff0e8;color:#843d1d;font-size:14px">Esri map tiles could not load. Press F12 → Network to inspect the failing request, or send us a screenshot.</div>
     </section>
@@ -134,13 +135,7 @@
           <option value="Broken pedestrian signal">Broken/missing pedestrian signal</option>
           <option value="Other">Other</option>
         </select>
-        <label for="severity">Severity level *</label>
-        <select id="severity" required>
-          <option value="">Choose a severity level</option>
-          <option value="Low">Low — Minor inconvenience</option>
-          <option value="Medium">Medium — Significant obstacle</option>
-          <option value="High">High — Serious safety concern</option>
-        </select>
+        <div class="hint" style="margin-top:10px">Describe what you observed. Public Works evaluates maintenance needs and priorities.</div>
         <label for="description">Description (optional)</label>
         <textarea id="description" maxlength="800" placeholder="Describe what you noticed and how it affects people walking..."></textarea>
         <label for="photo">Add photos (optional)</label>
@@ -168,14 +163,6 @@
         <button class="filter-chip" type="button" data-filter="Accessibility">Accessibility</button>
         <button class="filter-chip" type="button" data-filter="Broken pedestrian signal">Broken/missing pedestrian signal</button>
         <button class="filter-chip" type="button" data-filter="Other">Other</button>
-      </div>
-      <div class="filter-label">Filter by severity</div>
-      <div class="filter-row" id="severity-filters">
-        <button class="filter-chip active" type="button" data-severity="All">All severities</button>
-        <button class="filter-chip" type="button" data-severity="Low">Low</button>
-        <button class="filter-chip" type="button" data-severity="Medium">Medium</button>
-        <button class="filter-chip" type="button" data-severity="High">High</button>
-        <button class="filter-chip" type="button" data-severity="Unspecified">Not specified</button>
       </div>
       <div id="report-list"><div class="empty">No reports yet. Add the first one above.</div></div>
 <div class="notice"><strong>Note:</strong> All reports are reviewed before appearing on the public map. Please provide accurate information and avoid including personal or sensitive details in descriptions or photographs. Thank you for helping make Staunton safer and more accessible for everyone!</div>
@@ -250,18 +237,20 @@ async function testSupabaseConnection() {
 }
 
 testSupabaseConnection();
-      const SEVERITY_COLORS = {
-        Low: '#23865c', Medium: '#e0a126', High: '#d63f43',
-        Unspecified: '#78838e'
+      // Pins now use issue categories, not reporter-assigned severity.
+      const TYPE_COLORS = {
+        Sidewalk: '#1e3a8a', Crosswalk: '#0ea5e9', Lighting: '#d97706',
+        Accessibility: '#7c3aed', 'Broken pedestrian signal': '#db2777',
+        Other: '#64748b'
       };
       const SYMBOLS = {
-        'Sidewalk': '▰', 'Crosswalk': '▥', 'Lighting': '☀',
+        'Sidewalk': '🚶', 'Crosswalk': '▥', 'Lighting': '☀',
         'Accessibility': '♿', 'Broken pedestrian signal': '!', Other: '?'
       };
       // Display-friendly name; keep the stored type unchanged for API compatibility.
       const displayType = type => type === 'Broken pedestrian signal' ? 'Broken/missing pedestrian signal' : type;
       const KNOWN_TYPES = new Set(Object.keys(SYMBOLS));
-      const severityColor = severity => SEVERITY_COLORS[severity] || SEVERITY_COLORS.Unspecified;
+      const typeColor = type => TYPE_COLORS[type] || TYPE_COLORS.Other;
       const map = L.map('map').setView([38.1496, -79.0717], 14);
       const tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
@@ -281,7 +270,6 @@ testSupabaseConnection();
       let supabaseMarkers = [];
       let sharedReports = [];
       let activeFilter = 'All';
-      let activeSeverity = 'All';
       let editingId = null;
       let removedPhotoIndexes = new Set();
       let galleryReportId = null;
@@ -318,25 +306,18 @@ function renderSharedMarkers() {
       report.type === activeFilter ||
       (activeFilter === 'Other' && !KNOWN_TYPES.has(report.type));
 
-    const severityMatch =
-      activeSeverity === 'All' ||
-      report.severity === activeSeverity ||
-      (activeSeverity === 'Unspecified' &&
-        !['Low', 'Medium', 'High'].includes(report.severity));
-
-    return typeMatch && severityMatch;
+    return typeMatch;
   });
 
   visibleShared.forEach(report => {
     const marker = L.marker([report.lat, report.lng], {
-      icon: makeIcon(report.type, report.severity)
+      icon: makeIcon(report.type)
     }).addTo(map);
 
     marker.reportId = String(report.id);
 
     marker.bindPopup(`
       <strong>${safeText(displayType(report.type))}</strong>
-      <div><strong>Severity:</strong> ${safeText(report.severity)}</div>
       <p>${safeText(report.description || 'No description')}</p>
       <small>Approved community report</small>
       <div class="report-actions"><button class="text-button" type="button" data-shared-photos="${safeText(report.id)}">View approved photos</button></div>
@@ -412,7 +393,7 @@ function renderSharedMarkers() {
 async function loadApprovedReports() {
   const { data, error } = await supabaseClient
     .from('reports')
-    .select('id, type, severity, description, lat, lng, created_at')
+    .select('id, type, description, lat, lng, created_at')
     .eq('status', 'approved');
 
   if (error) {
@@ -437,12 +418,17 @@ function persistReports() {
       function safeText(value) {
         return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
       }
-      function makeIcon(type, severity) {
-        const symbol = SYMBOLS[type] || SYMBOLS.Other;
-        const color = severityColor(severity);
+      // Monochrome vector icons for Sidewalk and Lighting (never emoji-rendered).
+      const WHITE_PIN_SVGS = {
+        Sidewalk: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="m11 8-2 5 4 3 1 5M11 8l4 3 4 1M9 13l-4 7M15 11l-2 5"/></svg>',
+        Lighting: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>'
+      };
+      function makeIcon(type) {
+        const symbol = WHITE_PIN_SVGS[type] || safeText(SYMBOLS[type] || SYMBOLS.Other);
+        const color = typeColor(type);
         return L.divIcon({
           className: '',
-          html: `<div class="issue-icon" style="background:${color}">${safeText(symbol)}</div>`,
+          html: `<div class="issue-icon" style="background:${color}">${symbol}</div>`,
           iconSize: [30,30], iconAnchor: [15,15], popupAnchor: [0,-14]
         });
       }
@@ -453,20 +439,17 @@ function persistReports() {
       function popupHtml(report) {
         const photos = reportPhotos(report);
         const photo = photos.length ? `<div class="photo-gallery">${photoButtons(report, 'popup-photo')}</div><div class="photo-count">${photos.length} photo${photos.length === 1 ? '' : 's'} · Click to enlarge</div>` : '';
-        return `<strong>${safeText(displayType(report.type))}</strong><div><strong>Severity:</strong> ${safeText(report.severity || 'Not specified')}</div><div>${safeText(report.description || 'No additional details provided.')}</div><small>${safeText(formatDate(report.createdAt))}</small>${photo}<div class="report-actions"><button type="button" class="text-button" data-edit="${safeText(report.id)}">Edit report</button></div>`;
+        return `<strong>${safeText(displayType(report.type))}</strong><div>${safeText(report.description || 'No additional details provided.')}</div><small>${safeText(formatDate(report.createdAt))}</small>${photo}<div class="report-actions"><button type="button" class="text-button" data-edit="${safeText(report.id)}">Edit report</button></div>`;
       }
       function visibleReports() {
         return reports.filter(r => {
           const typeMatch = activeFilter === 'All' || r.type === activeFilter ||
             (activeFilter === 'Other' && !KNOWN_TYPES.has(r.type));
-          const severityMatch = activeSeverity === 'All' ||
-            (activeSeverity === 'Unspecified' ? !['Low','Medium','High'].includes(r.severity) : r.severity === activeSeverity);
-          return typeMatch && severityMatch;
+          return typeMatch;
         });
       }
       function syncFilters() {
         document.querySelectorAll('#filters .filter-chip').forEach(b => b.classList.toggle('active', b.dataset.filter === activeFilter));
-        document.querySelectorAll('#severity-filters .filter-chip').forEach(b => b.classList.toggle('active', b.dataset.severity === activeSeverity));
       }
       function clearLocation() {
         selectedLocation = null;
@@ -521,7 +504,6 @@ function persistReports() {
         resetEditor();
         editingId = String(r.id);
         $('issue-type').value = KNOWN_TYPES.has(r.type) ? r.type : 'Other';
-        $('severity').value = ['Low','Medium','High'].includes(r.severity) ? r.severity : '';
         $('description').value = r.description || '';
         chooseLocation(L.latLng(r.lat, r.lng));
         const photos = reportPhotos(r);
@@ -540,7 +522,7 @@ function persistReports() {
         if (!r) return;
         // If a report is hidden by a filter, clear filters so its marker is visible.
         if (!visibleReports().includes(r)) {
-          activeFilter = 'All'; activeSeverity = 'All'; syncFilters(); renderReports();
+          activeFilter = 'All'; syncFilters(); renderReports();
         }
         map.setView([r.lat, r.lng], Math.max(map.getZoom(),16));
         const marker = markers.find(m => m.reportId === String(r.id));
@@ -556,7 +538,7 @@ function renderReports() {
 
   visible.forEach(report => {
     const marker = L.marker([report.lat, report.lng], {
-      icon: makeIcon(report.type, report.severity),
+      icon: makeIcon(report.type),
       draggable: false
     }).addTo(map);
 
@@ -572,11 +554,7 @@ function renderReports() {
       report.type === activeFilter ||
       (activeFilter === 'Other' && !KNOWN_TYPES.has(report.type));
 
-    const severityMatch =
-      activeSeverity === 'All' ||
-      report.severity === activeSeverity;
-
-    return typeMatch && severityMatch;
+    return typeMatch;
   });
 
   // Update the Browse Reports count.
@@ -590,12 +568,11 @@ function renderReports() {
   const localHtml = visible.slice().reverse().map(r => `
     <div class="report-item">
       <span class="report-dot"
-        style="background:${severityColor(r.severity)}"></span>
+        style="background:${typeColor(r.type)}"></span>
       <div style="flex:1;min-width:0">
         <strong>${safeText(displayType(r.type))}</strong>
         <p>
-          Severity: ${safeText(r.severity || 'Not specified')}
-          · ${safeText(r.description || 'No description')}
+          ${safeText(r.description || 'No description')}
           · ${safeText(formatDate(r.createdAt))}
         </p>
         ${reportPhotos(r).length
@@ -619,12 +596,11 @@ function renderReports() {
   const sharedHtml = visibleShared.slice().reverse().map(r => `
     <div class="report-item">
       <span class="report-dot"
-        style="background:${severityColor(r.severity)}"></span>
+        style="background:${typeColor(r.type)}"></span>
       <div style="flex:1;min-width:0">
         <strong>${safeText(displayType(r.type))}</strong>
         <p>
-          Severity: ${safeText(r.severity)}
-          · ${safeText(r.description || 'No description')}
+          ${safeText(r.description || 'No description')}
           · ${safeText(formatDate(r.created_at))}
         </p>
         <p><strong>Approved community report</strong></p>
@@ -659,8 +635,11 @@ function renderReports() {
         event.preventDefault(); $('status').textContent = '';
         const type = $('issue-type').value;
         if (!type) { $('status').textContent = 'Please choose an issue type.'; return; }
-        const severity = $('severity').value;
-        if (!['Low', 'Medium', 'High'].includes(severity)) { $('status').textContent = 'Please choose a severity level.'; return; }
+        // Temporary compatibility value: the existing database and photo Edge Function
+        // still require severity. It is not provided or assessed by the reporter.
+        // Preserve historical values when editing browser-local reports.
+        const existingLocalReport = editingId === null ? null : reports.find(r => String(r.id) === editingId);
+        const severity = existingLocalReport?.severity || 'Low';
         if (!selectedLocation) { $('status').textContent = 'Please click the map to choose the issue location.'; return; }
         const files = Array.from($('photo').files);
         if (files.some(file => !['image/jpeg','image/png','image/webp'].includes(file.type))) {
@@ -800,7 +779,7 @@ function renderReports() {
         if (!persistReports()) { reports = previousReports; return; }
         const wasEditing = Boolean(original);
         resetEditor();
-        activeFilter = 'All'; activeSeverity = 'All'; syncFilters();
+        activeFilter = 'All'; syncFilters();
         renderReports();
         $('status').textContent = wasEditing ? 'Report updated in this browser.' : 'Report saved in this browser.';
         if (!wasEditing) {
@@ -814,13 +793,6 @@ function renderReports() {
         syncFilters();
         renderReports();
         renderSharedMarkers();
-      });
-      $('severity-filters').addEventListener('click', event => {
-        const button = event.target.closest('[data-severity]'); if (!button) return;
-        activeSeverity = button.dataset.severity;
-syncFilters();
-renderReports();
-renderSharedMarkers();
       });
       function handleReportAction(event) {
         const photoButton = event.target.closest('[data-shared-photos]');
@@ -845,7 +817,6 @@ if (showShared) {
 
   // Clear filters so the selected report is visible.
   activeFilter = 'All';
-  activeSeverity = 'All';
   syncFilters();
   renderReports();
 renderSharedMarkers();
@@ -924,7 +895,7 @@ renderSharedMarkers();
         galleryIndex = Math.max(0, Math.min(galleryIndex, photos.length - 1));
         $('photo-dialog-image').src = photos[galleryIndex];
         $('photo-dialog-image').alt = `Enlarged report photo ${galleryIndex + 1} of ${photos.length}`;
-        $('photo-dialog-title').textContent = `${report.type} — ${report.severity || 'Not specified'} severity`;
+        $('photo-dialog-title').textContent = displayType(report.type);
         $('photo-position').textContent = `${galleryIndex + 1} of ${photos.length}`;
         $('photo-prev').disabled = galleryIndex === 0;
         $('photo-next').disabled = galleryIndex === photos.length - 1;
