@@ -116,7 +116,14 @@
   <main>
     <section class="map-card" aria-label="Interactive issue map">
       <div class="map-top"><strong>Community issue map</strong><span>Click anywhere on the map to place a report pin</span></div>
-      <div class="type-legend" aria-label="Issue type legend"><span><i class="legend-dot" style="background:#276749"></i>Sidewalk</span><span><i class="legend-dot" style="background:#2563eb"></i>Crosswalk</span><span><i class="legend-dot" style="background:#b7791f"></i>Lighting</span><span><i class="legend-dot" style="background:#7c3aed"></i>Accessibility</span><span><i class="legend-dot" style="background:#c2413b"></i>Pedestrian signal</span><span><i class="legend-dot" style="background:#64748b"></i>Other</span></div>
+      <div class="type-legend" aria-label="Issue type legend">
+        <span data-legend-type="Sidewalk"><i class="legend-dot" style="background:#2ECC71"></i>Sidewalk</span>
+        <span data-legend-type="Crosswalk"><i class="legend-dot" style="background:#222222"></i>Crosswalk</span>
+        <span data-legend-type="Lighting"><i class="legend-dot" style="background:#F1C40F"></i>Lighting</span>
+        <span data-legend-type="Accessibility"><i class="legend-dot" style="background:#8E44AD"></i>Accessibility</span>
+        <span data-legend-type="Broken pedestrian signal"><i class="legend-dot" style="background:#E67E22"></i>Pedestrian signal</span>
+        <span data-legend-type="Other"><i class="legend-dot" style="background:#5D6D7E"></i>Other</span>
+      </div>
       <div id="map" role="application" aria-label="Map for selecting an issue location"></div>
       <div id="map-error" hidden role="alert" style="padding:12px 16px;background:#fff0e8;color:#843d1d;font-size:14px">Esri map tiles could not load. Press F12 → Network to inspect the failing request, or send us a screenshot.</div>
     </section>
@@ -238,11 +245,15 @@ async function testSupabaseConnection() {
 
 testSupabaseConnection();
       // Pins now use issue categories, not reporter-assigned severity.
-      const TYPE_COLORS = {
-        Sidewalk: '#1e3a8a', Crosswalk: '#0ea5e9', Lighting: '#d97706',
-        Accessibility: '#7c3aed', 'Broken pedestrian signal': '#db2777',
-        Other: '#64748b'
-      };
+const TYPE_COLORS = {
+  Sidewalk: '#2ECC71',
+  Crosswalk: '#222222',
+  Lighting: '#F1C40F',
+  Accessibility: '#8E44AD',
+  'Broken pedestrian signal': '#E67E22',
+  Other: '#5D6D7E'
+};
+
       const SYMBOLS = {
         'Sidewalk': '🚶', 'Crosswalk': '▥', 'Lighting': '☀',
         'Accessibility': '♿', 'Broken pedestrian signal': '!', Other: '?'
@@ -251,6 +262,11 @@ testSupabaseConnection();
       const displayType = type => type === 'Broken pedestrian signal' ? 'Broken/missing pedestrian signal' : type;
       const KNOWN_TYPES = new Set(Object.keys(SYMBOLS));
       const typeColor = type => TYPE_COLORS[type] || TYPE_COLORS.Other;
+      // Keep legend swatches synchronized with the colors used by map pins.
+      document.querySelectorAll('[data-legend-type]').forEach(item => {
+        const dot = item.querySelector('.legend-dot');
+        if (dot) dot.style.backgroundColor = typeColor(item.dataset.legendType);
+      });
       const map = L.map('map').setView([38.1496, -79.0717], 14);
       const tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
